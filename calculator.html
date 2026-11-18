@@ -137,13 +137,67 @@ res.sort((a,b)=>a-b);const q=f=>res[Math.min(runs-1,Math.floor(f*runs))];return{
 const soulKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'').replace(/^crit(hit|damageboost)$/,'critical$1');
 const soulBis={weapon:'Combat Speed|Weapon Damage Boost|Damage Boost|Might|Attack|Multi-hit Chance|Precision|Accuracy|Critical Hit',helm:'Double Chance|Attack Increase|Accuracy|Critical Hit|Attack',shoulders:'Double Chance|Critical Damage Boost|Accuracy|Critical Hit|Attack',chest:'Damage Boost|Accuracy|Critical Hit|Attack',legs:'Attack Increase|Damage Tolerance|Accuracy|Critical Hit|Attack',cloak:'Double Chance|Attack Increase|Accuracy|Critical Hit|Attack',gloves:'Combat Speed|Accuracy|Critical Hit|Attack',boots:'Move Speed|Accuracy|Critical Hit|Attack',earring:'Move Speed|Might|Accuracy|Critical Hit|Precision|Attack',necklace:'Combat Speed|Might|Accuracy|Critical Hit|Precision|Attack',rings:'Might'};
 function soulGroup(slot,stat,range){const k=soulKey(slot),alias={guard:'weapon',helmet:'helm',pauldrons:'shoulders',shoulder:'shoulders',top:'chest',breastplate:'chest',pants:'legs',greaves:'legs',cloaks:'cloak',shoes:'boots',earrings:'earring',ring:'rings'};if(/\bLv\.?\s*\+\s*\d/i.test(range||''))return 'Skill Lines';const statKey=soulKey(stat).replace(/^multihit$/,'multihitchance');return (soulBis[alias[k]||k]||'').split('|').some(n=>soulKey(n)===statKey)?'BIS Lines':'Bad Lines';}
-function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Skill Lines'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>a[0].localeCompare(b[0]));return rows.length?`<optgroup label="${g}">${rows.map(([, ,value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('')}</optgroup>`:'';}).join('');}
+function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Skill Lines'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>soulLabel(slot,a[0]).localeCompare(soulLabel(slot,b[0]),undefined,{numeric:true}));return rows.length?`<optgroup label="${g}">${rows.map(([n, ,value,label])=>`<option value="${esc(value)}">${esc(label===n?soulLabel(slot,n):label.endsWith(n)?label.slice(0,label.length-n.length)+soulLabel(slot,n):label)}</option>`).join('')}</optgroup>`:'';}).join('');}
+
+function soulLabel(slot,n){const pool=soulPools()[slot]||[];const skills=pool.filter(([a,,r])=>soulGroup(slot,a,r)==='Skill Lines');const i=skills.findIndex(([a])=>a===n);return i<0?n:`Skill ${i+1}`;}
+function soulOutcome(pool,lines,locked,targets){
+ const current=lines.filter(Boolean), have=new Set(current), wanted=new Set(targets);
+ if(have.size!==current.length)return {message:'A stat is on two lines. Correct the duplicate to see odds.'};
+ if(!current.length)return {message:'Enter at least one current line.'};
+ if(!wanted.size)return {message:'Select at least one wanted stat.'};
+ const remaining=pool.filter(([n])=>!have.has(n)), hits=remaining.filter(([n])=>wanted.has(n));
+ if(!hits.length)return {message:'No missing wanted stats in this pool.'};
+ const candidates=lines.flatMap((n,i)=>n&&!locked.includes(i)&&!wanted.has(n)?[i]:[]);
+ if(!candidates.length)return {message:'No unlocked unwanted line to reroll for a net gain.'};
+ const sum=rows=>rows.reduce((a,[,w])=>a+Number(w),0);
+ return {p:sum(hits)/sum(remaining),candidates,hits};
+}
+function soulWantedOptions(pool,slot,lines,chosen){
+ return ['BIS Lines','Bad Lines','Skill Lines'].map(g=>{
+ const rows=pool.filter(([n,,r])=>soulGroup(slot,n,r)===g).sort(([a],[b])=>soulLabel(slot,a).localeCompare(soulLabel(slot,b),undefined,{numeric:true}));
+ return rows.length?`<fieldset><legend>${g}</legend>${rows.map(([n])=>`<label style="display:inline-block;margin:0.2em 0.8em 0.2em 0"><input type="checkbox" value="${esc(n)}" ${chosen.includes(n)?'checked':''}> ${esc(soulLabel(slot,n))}${lines.includes(n)?' (On item)':''}</label>`).join('')}</fieldset>`:'';
+ }).join('');
+}
+function renderSoulComparison(pools,sl,saved){
+ const box=$('soul-upgrades');
+ const settings=state.soulUpgrades??={wanted:[],compare:false,slot:sl.slot,lines:Array(6).fill(''),locks:[],targets:[]};
+ const pool=pools[sl.slot], slots=Object.keys(pools);
+ if(!slots.includes(settings.slot))settings.slot=sl.slot;
+ const other=pools[settings.slot];
+ settings.lines=settings.lines.map(n=>other.some(([a])=>a===n)?n:'');
+ settings.targets=settings.targets.filter(n=>other.some(([a])=>a===n));
+ const aTargets=settings.wanted.length?settings.wanted:sl.target?[sl.target]:[];
+ const a=soulOutcome(pool,sl.lines,saved,aTargets);
+ const b=soulOutcome(other,settings.lines,settings.locks,settings.targets);
+ const summary=r=>r.message||`${pct(r.p)} per reroll · Reroll ${r.candidates.map(i=>esc(SOUL_LINES[i])).join(' or ')}${r.candidates.length>1?' (same next-roll odds)':''}`;
+ let diff='';if(a.p!=null&&b.p!=null){const d=(a.p-b.p)*100;diff=Math.abs(d)<1e-9?'Same next-roll odds.':`${d>0?'Item A':'Item B'} leads by ${Math.abs(d).toLocaleString('en-US',{maximumFractionDigits:6})} percentage points.`;}
+ const opts='<option value="">(empty)</option>'+soulOptions(other.map(([n,,r])=>[n,r,n,n]),settings.slot);
+ box.innerHTML=`<details ${box.querySelector('details')?.open||settings.wanted.length?'open':''}><summary>Wanted stats for Item A (${settings.wanted.length} selected)</summary><p>Select any acceptable stats. Clear the checklist to use the single-target dropdown.</p><div data-wanted="wanted">${soulWantedOptions(pool,sl.slot,sl.lines,settings.wanted)}</div></details>
+ <p><label><input type="checkbox" data-compare ${settings.compare?'checked':''}> Compare with another item</label></p>
+ ${settings.compare?`<section><h3>Item B</h3><label>Slot <select data-bslot>${slots.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>
+ <div>${settings.lines.map((n,i)=>`<div><label>${esc(SOUL_LINES[i])} <select data-bline="${i}">${opts}</select></label> <label><input type="checkbox" data-block="${i}" ${settings.locks.includes(i)?'checked':''} ${n?'':'disabled'}> Locked</label></div>`).join('')}</div>
+ <details ${box.querySelector('[data-bdetails]')?.open||!settings.targets.length?'open':''} data-bdetails><summary>Wanted stats for Item B (${settings.targets.length} selected)</summary><div data-wanted="targets">${soulWantedOptions(other,settings.slot,settings.lines,settings.targets)}</div></details>
+ <h3>Next-roll comparison</h3><p>Item A (${esc(sl.slot)}): ${summary(a)}</p><p>Item B (${esc(settings.slot)}): ${summary(b)}</p><p>${diff}</p></section>`:''}`;
+ box.onchange=e=>{const x=e.target, group=x.closest('[data-wanted]');
+ if(group)settings[group.dataset.wanted]=Array.from(group.querySelectorAll('input:checked'),c=>c.value);
+ else if(x.matches('[data-compare]'))settings.compare=x.checked;
+ else if(x.matches('[data-bslot]')){settings.slot=x.value;settings.lines=Array(6).fill('');settings.locks=[];settings.targets=[];}
+ else if(x.matches('[data-bline]')){const i=+x.dataset.bline;settings.lines[i]=x.value;if(!x.value)settings.locks=settings.locks.filter(j=>j!==i);}
+ else if(x.matches('[data-block]')){const i=+x.dataset.block;settings.locks=x.checked?[...settings.locks,i]:settings.locks.filter(j=>j!==i);}
+ else return;
+ const controls=Array.from(box.querySelectorAll('input,select')), index=controls.indexOf(x);save();renderSoul();if(!x.matches('[data-bslot]'))box.querySelectorAll('input,select')[index]?.focus();else box.querySelector('[data-bslot]')?.focus();
+ };
+ const bs=box.querySelector('[data-bslot]');if(bs)bs.value=settings.slot;
+ box.querySelectorAll('[data-bline]').forEach((x,i)=>x.value=settings.lines[i]);
+ return {settings,a,summary};
+}
+
 function renderSoul(){const pools=soulPools(),sl=state.soul,slots=Object.keys(pools);if(!pools[sl.slot])sl.slot=slots[0];
 $('sslot').innerHTML=slots.map(s=>`<option>${esc(s)}</option>`).join('');$('sslot').value=sl.slot;
 const pool=pools[sl.slot],nm=pool.map(p=>p[0]),w=pool.map(p=>+p[1]),W=w.reduce((a,b)=>a+b,0),idx=n=>nm.indexOf(n);
 if(idx(sl.target)<0)sl.target='';sl.lines=sl.lines.map(n=>idx(n)<0?'':n);
 const opts='<option value="">(empty)</option>'+soulOptions(pool.map(([n,w,r])=>[n,r,n,n]),sl.slot);
-$('starget').innerHTML='<option value="">Select a stat…</option>'+nm.map(n=>`<option>${esc(n)}</option>`).join('');$('starget').value=sl.target;
+$('starget').innerHTML='<option value="">Select a stat…</option>'+soulOptions(pool.map(([n,,r])=>[n,r,n,n]),sl.slot);$('starget').value=sl.target;
 for(let i=0;i<6;i++){$('sl'+i).innerHTML=opts;$('sl'+i).value=sl.lines[i];}
 const ti=idx(sl.target);$('srange').textContent=ti>=0?`${pct(w[ti]/100)} to roll${pool[ti][2]?' · value '+pool[ti][2]:''}`:'';
 const filled=[];sl.lines.forEach((n,i)=>{if(n)filled.push(i);});
@@ -157,29 +211,41 @@ $('sline').innerHTML=soulOptions(eligible.map(i=>[sl.lines[i],pool[idx(sl.lines[
 if(!eligible.includes(+sl.reroll))sl.reroll=eligible[0]??-1;$('sline').value=String(sl.reroll);
 $('sline').classList.remove('soul-good','soul-worse');$('sadvice').classList.remove('soul-good','soul-worse');$('sadvice').textContent='';
 const out=$('sresult'),warn=m=>{out.innerHTML=`<p class="warn">${m}</p>`;$('sadvice').textContent='';};
+
+if(!$('soul-upgrades')){const panel=document.createElement('div');panel.id='soul-upgrades';out.before(panel);}
+const multi=renderSoulComparison(pools,sl,saved);
+$('starget').disabled=multi.settings.wanted.length>0;
+if(multi.settings.wanted.length){
+ $('srange').textContent='';const {a,summary}=multi;
+ if(a.message)return warn(a.message);
+ for(const id of ['sline','sadvice'])$(id).classList.add(a.candidates.includes(+sl.reroll)?'soul-good':'soul-worse');
+ $('sadvice').textContent='Reroll an unlocked unwanted line. All eligible unwanted lines have the same next-roll odds.';
+ out.innerHTML=`<p class="big">${summary(a)}</p><p>Can roll: ${esc(a.hits.map(([n])=>soulLabel(sl.slot,n)).join(', '))}</p><p class="muted">About ${fmt(Math.round(10/a.p)/10)} attempts to one hit if the odds stayed constant. Failed rerolls can change the odds.</p>`;
+ return;
+}
 if(ti<0)return warn('Select the stat you want.');if(!filled.length)return warn('Enter at least one line.');
-const stats=filled.map(i=>idx(sl.lines[i])),dup=stats.find((s,k)=>stats.indexOf(s)!==k);if(dup!==undefined)return warn(`${esc(nm[dup])} is on two lines. A stat can only appear once on an item.`);
-const have=filled.findIndex(i=>idx(sl.lines[i])===ti);if(have>=0)return out.innerHTML=`<p class="ok big">Already done: ${esc(sl.target)} is on ${SOUL_LINES[filled[have]]}.</p>`;
+const stats=filled.map(i=>idx(sl.lines[i])),dup=stats.find((s,k)=>stats.indexOf(s)!==k);if(dup!==undefined)return warn(`${esc(soulLabel(sl.slot,nm[dup]))} is on two lines. A stat can only appear once on an item.`);
+const have=filled.findIndex(i=>idx(sl.lines[i])===ti);if(have>=0)return out.innerHTML=`<p class="ok big">Already done: ${esc(soulLabel(sl.slot,sl.target))} is on ${SOUL_LINES[filled[have]]}.</p>`;
 if(!eligible.length)return warn('All filled lines are locked. Unlock a line to compare reroll strategies.');
 const allowed=eligible.map(i=>filled.indexOf(i));
 const wt=w[ti],excl=stats.reduce((s,i)=>s+w[i],0),p=wt/(W-excl),n=filled.length,pos=filled.indexOf(+sl.reroll);
 const need=q=>Math.ceil(Math.log(1-q)/Math.log(1-p)),lowPos=allowed.reduce((b,k)=>w[stats[k]]<w[stats[b]]-1e-12?k:b,allowed[0]);
 const recommended=Math.abs(w[stats[pos]]-w[stats[lowPos]])<1e-12;
 for(const id of ['sline','sadvice'])$(id).classList.add(recommended?'soul-good':'soul-worse');
-$('sadvice').textContent=recommended?'Best choice: this line holds your lowest-chance unlocked stat.':`Better: reroll ${SOUL_LINES[filled[lowPos]]} (${nm[stats[lowPos]]}, ${pct(w[stats[lowPos]]/100)}), the line holding your lowest-chance unlocked stat.`;
+$('sadvice').textContent=recommended?'Best choice: this line holds your lowest-chance unlocked stat.':`Better: reroll ${SOUL_LINES[filled[lowPos]]} (${soulLabel(sl.slot,nm[stats[lowPos]])}, ${pct(w[stats[lowPos]]/100)}), the line holding your lowest-chance unlocked stat.`;
 $('sadvice').textContent+=' The next roll has the same odds on every line.';
 const others=[...Array(w.length).keys()].filter(i=>i!==ti).sort((a,b)=>w[b]-w[a]);
-const bestRows=[];for(let k=Math.max(1,3);k<=6;k++){const top=others.slice(0,k),ex=top.reduce((s,i)=>s+w[i],0),pb=wt/(W-ex);bestRows.push(`<tr${k===n?' class="best"':''}><td>${k} lines${k===n?' (yours)':''}</td><td>${esc(top.map(i=>nm[i]).join(', '))}</td><td>${pct(pb)}</td><td>${fmt(Math.round(1/pb*100)/100)}</td></tr>`);}
+const bestRows=[];for(let k=Math.max(1,3);k<=6;k++){const top=others.slice(0,k),ex=top.reduce((s,i)=>s+w[i],0),pb=wt/(W-ex);bestRows.push(`<tr${k===n?' class="best"':''}><td>${k} lines${k===n?' (yours)':''}</td><td>${esc(top.map(i=>soulLabel(sl.slot,nm[i])).join(', '))}</td><td>${pct(pb)}</td><td>${fmt(Math.round(1/pb*100)/100)}</td></tr>`);}
 const sims=[['Reroll the selected line every time','fixed'],['Always reroll the line with your lowest-chance stat','low']].map(([lab,pol])=>{const s=soulSim(w,stats,ti,pol,pos,12000,allowed);return `<tr><td>${lab}</td><td>${fmt(Math.round(s.mean*10)/10)}</td><td>${s.median}</td><td>${s.p90}</td><td>${s.p99}</td></tr>`;});
-const lineRows=filled.map((li,k)=>`<tr${allowed.includes(k)&&Math.abs(w[stats[k]]-w[stats[lowPos]])<1e-12?' class="best"':''}><td>${SOUL_LINES[li]}</td><td>${esc(nm[stats[k]])}</td><td>${pct(w[stats[k]]/100)}</td><td>${saved.includes(li)?'Locked':Math.abs(w[stats[k]]-w[stats[lowPos]])<1e-12?'Recommended':'Keep'}</td></tr>`).join('');
+const lineRows=filled.map((li,k)=>`<tr${allowed.includes(k)&&Math.abs(w[stats[k]]-w[stats[lowPos]])<1e-12?' class="best"':''}><td>${SOUL_LINES[li]}</td><td>${esc(soulLabel(sl.slot,nm[stats[k]]))}</td><td>${pct(w[stats[k]]/100)}</td><td>${saved.includes(li)?'Locked':Math.abs(w[stats[k]]-w[stats[lowPos]])<1e-12?'Recommended':'Keep'}</td></tr>`).join('');
 const bestN=wt/(W-others.slice(0,n).reduce((s,i)=>s+w[i],0));
 out.innerHTML=`<p class="big">${pct(p)} per reroll</p><p class="sub">Expected ${fmt(Math.round(1/p*10)/10)} rerolls (Sync Stones or fodder items) if the odds never changed · 50% within ${need(0.5)}, 90% within ${need(0.9)}, 99% within ${need(0.99)} rerolls</p>
-<p class="muted">Odds now: ${esc(sl.target)} ${fmt(wt)} ÷ (pool ${fmt(W)} − stats on your lines ${fmt(Math.round(excl*1000)/1000)}). Best possible with ${n} line${n>1?'s':''}: ${pct(bestN)} per reroll, expected ${fmt(Math.round(1/bestN*10)/10)} rerolls.</p>
+<p class="muted">Odds now: ${esc(soulLabel(sl.slot,sl.target))} ${fmt(wt)} ÷ (pool ${fmt(W)} − stats on your lines ${fmt(Math.round(excl*1000)/1000)}). Best possible with ${n} line${n>1?'s':''}: ${pct(bestN)} per reroll, expected ${fmt(Math.round(1/bestN*10)/10)} rerolls.</p>
 <h3>Which line to reroll</h3><div class="scroll"><table><tr><th>Line</th><th>Stat on it</th><th>Chance of that stat</th><th>Advice</th></tr>${lineRows}</table></div><p class="muted">The odds of this reroll are the same whichever line you pick, because every stat on your lines is excluded. The difference is afterwards: a failed reroll gives that line a random new stat, so rerolling the line with your lowest-chance stat keeps your high-chance stats in place.</p>
 <h3>Realistic number of rerolls (simulated)</h3><div class="scroll"><table><tr><th>Strategy</th><th>Average</th><th>Median</th><th>90% done by</th><th>99% done by</th></tr>${sims.join('')}</table></div><p class="muted">12,000 simulated runs. The odds change after each failed reroll because the stat on the rerolled line changes, which is why this differs a little from the simple estimate above.</p>
 <h3>Best case by number of lines</h3><div class="scroll"><table><tr><th>Lines filled</th><th>Best stats to keep on them</th><th>Chance per reroll</th><th>Expected rerolls</th></tr>${bestRows.join('')}</table></div><p class="muted">Best case assumes your lines hold the highest-chance stats other than the one you want. More filled lines means more stats excluded, which improves your odds.</p>`;}
 function setSoul(k,v){state.soul[k]=v;save();renderSoul();}
-$('sslot').onchange=()=>{state.soul.slot=$('sslot').value;state.soul.target='';state.soul.lines=['','','','','',''];save();renderSoul();syncSoulEditor();};
+$('sslot').onchange=()=>{state.soul.slot=$('sslot').value;if(state.soulUpgrades)state.soulUpgrades.wanted=[];state.soul.target='';state.soul.lines=['','','','','',''];save();renderSoul();syncSoulEditor();};
 $('starget').onchange=()=>setSoul('target',$('starget').value);$('sline').onchange=()=>setSoul('reroll',+$('sline').value);
 for(let i=0;i<6;i++)$('sl'+i).onchange=()=>{state.soul.lines[i]=$('sl'+i).value;save();renderSoul();};
 function syncSoulEditor(){const pools=soulPools(),n=state.soul.slot;$('sname').value=n;$('spool').value=pools[n].map(([a,b,c])=>`${a} = ${b}${c?' | '+c:''}`).join('\n');}
