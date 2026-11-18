@@ -136,10 +136,26 @@ function soulSim(w,start,t,policy,fixedPos,runs,allowed){const m=w.length,W=w.re
 res.sort((a,b)=>a-b);const q=f=>res[Math.min(runs-1,Math.floor(f*runs))];return{mean:res.reduce((a,b)=>a+b,0)/runs,median:q(0.5),p90:q(0.9),p99:q(0.99)};}
 const soulKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'').replace(/^crit(hit|damageboost)$/,'critical$1');
 const soulBis={weapon:'Combat Speed|Weapon Damage Boost|Damage Boost|Might|Attack|Multi-hit Chance|Precision|Accuracy|Critical Hit',helm:'Double Chance|Attack Increase|Accuracy|Critical Hit|Attack',shoulders:'Double Chance|Critical Damage Boost|Accuracy|Critical Hit|Attack',chest:'Damage Boost|Accuracy|Critical Hit|Attack',legs:'Attack Increase|Damage Tolerance|Accuracy|Critical Hit|Attack',cloak:'Double Chance|Attack Increase|Accuracy|Critical Hit|Attack',gloves:'Combat Speed|Accuracy|Critical Hit|Attack',boots:'Move Speed|Accuracy|Critical Hit|Attack',earring:'Move Speed|Might|Accuracy|Critical Hit|Precision|Attack',necklace:'Combat Speed|Might|Accuracy|Critical Hit|Precision|Attack',rings:'Might'};
-function soulGroup(slot,stat,range){const k=soulKey(slot),alias={guard:'weapon',helmet:'helm',pauldrons:'shoulders',shoulder:'shoulders',top:'chest',breastplate:'chest',pants:'legs',greaves:'legs',cloaks:'cloak',shoes:'boots',earrings:'earring',ring:'rings'};if(/\bLv\.?\s*\+\s*\d/i.test(range||''))return 'Skill Lines';const statKey=soulKey(stat).replace(/^multihit$/,'multihitchance');return (soulBis[alias[k]||k]||'').split('|').some(n=>soulKey(n)===statKey)?'BIS Lines':'Bad Lines';}
-function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Skill Lines'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>soulLabel(slot,a[0]).localeCompare(soulLabel(slot,b[0]),undefined,{numeric:true}));return rows.length?`<optgroup label="${g}">${rows.map(([n, ,value,label])=>`<option value="${esc(value)}">${esc(label===n?soulLabel(slot,n):label.endsWith(n)?label.slice(0,label.length-n.length)+soulLabel(slot,n):label)}</option>`).join('')}</optgroup>`:'';}).join('');}
+const SOUL_CLASSES={"Assassin": [["Quick Slice", "Savage Roar", "Shadowstrike", "Ambush", "Heart Gore", "Storm Rampage", "Whirlwind Slice", "Flash Slice", "Infiltrate", "Shadow Fall", "Insignia Explosion", "Defiance"], ["Heightened Sixth Sense", "Exploit Weakness", "Apply Poison", "Rear Smite", "Assault Stance", "Impact Hit", "Ambush Stance", "Defense Break", "Revitalization Contract", "Determination"]], "Chanter": [["Incandescent Blow", "Onslaught", "Rushing Smash", "Impactful Crush", "Dark Crush", "Gust Rampage", "Heat Wave Blow", "Recuperation", "Tremor Crush", "Wave Blow", "Spinning Strike", "Defiance"], ["Blessing of Life", "Crossguard", "Protection Circle", "Inspiring Spell", "Attack Preparation", "Impact Hit", "Raging Spell", "Earth's Promise", "Survival Willpower", "Wind's Promise"]], "Cleric": [["Debilitating Mark", "Earth's Retribution", "Judgment Thunder", "Divine Aura", "Chain of Torment", "Lightning Strike Scattershot", "Light of Regeneration", "Condemnation", "Healing Light", "Radiant Recovery", "Bolt", "Defiance"], ["Warm Benediction", "Empyrean Lords' Benediction", "Empyrean Lord's Grace", "Healing Enhancement", "Immortal Veil", "Heal Block", "Prayer of Concentration", "Earth's Grace", "Survival Willpower", "Radiant Benediction"]], "Ranger": [["Snare Shot", "Snipe", "Tempest Shot", "Marking Shot", "Drill Dart", "Arrow Scattershot", "Gale Arrow", "Explosion Trap", "Burst Arrow", "Suppressing Arrow", "Deadshot", "Defiance"], ["Vigilant Eye", "Concentrated Fire", "Wind Vigor", "Focused Eye", "Hunter's Resolve", "Unyielding Resolve", "Rooting Eye", "Melee Fire", "Revitalization Contract", "Hunter's Soul"]], "Sorcerer": [["Firestorm", "Flame Arrow", "Ice Chain", "Bittercold Wind", "Blaze", "Flame Scattershot", "Frost", "Winter's Shackles", "Frost Burst", "Wish of Concentration", "Hellfire", "Defiance"], ["Fire Mark", "Robe of Earth", "Cold Snap", "Robe of Flame", "Absorb Essence", "Grace of Resistance", "Robe of Cold", "Grace of Enhancement", "Revitalization Contract", "Vitality Evaporation"]], "Spiritmaster": [["Cold Shock", "Combustion", "Summon: Fire Spirit", "Summon: Water Spirit", "Jointstrike: Curse", "Rapid Scattershot", "Summon: Earth Spirit", "Dimensional Control", "Summon: Wind Spirit", "Soul's Cry", "Elemental Fusion", "Defiance"], ["Spirit Strike", "Spirit Protection", "Spirit's Descent", "Corrode", "Spirit Revitalization", "Mental Focus", "Consecutive Countercurrent", "Spirit Communion", "Revitalization Contract", "Element Unification"]], "Templar": [["Poach", "Pummel", "Vicious Strike", "Shield Smite", "Judgment", "Flash Rampage", "Debilitating Smash", "Warding Strike", "Shield Rush", "Annihilate", "Punishment", "Defiance"], ["Enhance Health", "Warding Shield", "Punishing Benediction", "Ironclad Defense", "Guarding Seal", "Impact Hit", "Insulting Roar", "Fury", "Survival Willpower", "Block Pain"]]};
+const SOUL_HIGH={Spiritmaster:new Set(["Soul's Cry",'Summon: Wind Spirit','Rapid Scattershot','Defiance'])};
+const soulSkillKind=slot=>/^(weapon|guard|rings?)$/.test(soulKey(slot))?'Abilities':'Passives';
+const soulIsSkill=r=>/\bLv\.?\s*\+\s*\d/i.test(r||'');
+const soulClassName=c=>c==='Gladiator'||SOUL_HIGH[c]?c:c+' - TBC';
+function soulClassSelect(c,attr){return `<label>Class <select ${attr}>${['Gladiator',...Object.keys(SOUL_CLASSES)].sort().map(n=>`<option value="${n}" ${n===c?'selected':''}>${soulClassName(n)}</option>`).join('')}</select></label>`;}
+function soulPoolFor(base,slot,c){
+ const roster=SOUL_CLASSES[c]; if(!roster||!base.some(([, ,r])=>soulIsSkill(r))||Object.hasOwn(state.soulPools,slot))return base;
+ const active=soulSkillKind(slot)==='Abilities';const high=SOUL_HIGH[c];
+ return [...base.filter(([, ,r])=>!soulIsSkill(r)),...roster[active?0:1].map(n=>[n,active?(high?(high.has(n)?1.668:1.666):20/12):2,'Lv. +1'])];
+}
+function soulRateNote(slot,c){if(Object.hasOwn(state.soulPools,slot))return 'Custom pool in use; class defaults do not override saved custom data.';
+ if(c==='Gladiator')return '';
+ if(soulSkillKind(slot)==='Passives')return 'Provisional pool: passive names and 2% weights are assumed for this slot.';
+ return SOUL_HIGH[c]?'Active weights entered from your report; applicability across Weapon, Guard and Rings is inferred.':'Provisional pool: abilities share the 20% base weight equally until the four 1.668% abilities are confirmed.';}
 
-function soulLabel(slot,n){const pool=soulPools()[slot]||[];const skills=pool.filter(([a,,r])=>soulGroup(slot,a,r)==='Skill Lines');const i=skills.findIndex(([a])=>a===n);return i<0?n:`Skill ${i+1}`;}
+function soulGroup(slot,stat,range){const k=soulKey(slot),alias={guard:'weapon',helmet:'helm',pauldrons:'shoulders',shoulder:'shoulders',top:'chest',breastplate:'chest',pants:'legs',greaves:'legs',cloaks:'cloak',shoes:'boots',earrings:'earring',ring:'rings'};if(soulIsSkill(range))return soulSkillKind(slot);const statKey=soulKey(stat).replace(/^multihit$/,'multihitchance');return (soulBis[alias[k]||k]||'').split('|').some(n=>soulKey(n)===statKey)?'BIS Lines':'Bad Lines';}
+function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Abilities','Passives'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>soulLabel(slot,a[0]).localeCompare(soulLabel(slot,b[0]),undefined,{numeric:true}));return rows.length?`<optgroup label="${g}">${rows.map(([n, ,value,label])=>`<option value="${esc(value)}">${esc(label===n?soulLabel(slot,n):label.endsWith(n)?label.slice(0,label.length-n.length)+soulLabel(slot,n):label)}</option>`).join('')}</optgroup>`:'';}).join('');}
+
+function soulLabel(slot,n){return n;}
 function soulOutcome(pool,lines,locked,targets){
  const current=lines.filter(Boolean), have=new Set(current), wanted=new Set(targets);
  if(have.size!==current.length)return {message:'A stat is on two lines. Correct the duplicate to see odds.'};
@@ -153,7 +169,7 @@ function soulOutcome(pool,lines,locked,targets){
  return {p:sum(hits)/sum(remaining),candidates,hits};
 }
 function soulWantedOptions(pool,slot,lines,chosen){
- return ['BIS Lines','Bad Lines','Skill Lines'].map(g=>{
+ return ['BIS Lines','Bad Lines','Abilities','Passives'].map(g=>{
  const rows=pool.filter(([n,,r])=>soulGroup(slot,n,r)===g).sort(([a],[b])=>soulLabel(slot,a).localeCompare(soulLabel(slot,b),undefined,{numeric:true}));
  return rows.length?`<fieldset><legend>${g}</legend>${rows.map(([n])=>`<label style="display:inline-block;margin:0.2em 0.8em 0.2em 0"><input type="checkbox" value="${esc(n)}" ${chosen.includes(n)?'checked':''}> ${esc(soulLabel(slot,n))}${lines.includes(n)?' (On item)':''}</label>`).join('')}</fieldset>`:'';
  }).join('');
@@ -161,10 +177,11 @@ function soulWantedOptions(pool,slot,lines,chosen){
 function renderSoulComparison(pools,sl,saved){
  const box=$('soul-upgrades');
  const settings=state.soulUpgrades??={wanted:[],compare:false,slot:sl.slot,lines:Array(6).fill(''),locks:[],targets:[]};
- const pool=pools[sl.slot], slots=Object.keys(pools);
+ const pool=soulPoolFor(pools[sl.slot],sl.slot,sl.className), slots=Object.keys(pools);
  if(!slots.includes(settings.slot))settings.slot=sl.slot;
- const other=pools[settings.slot];
+ const other=soulPoolFor(pools[settings.slot],settings.slot,sl.className);
  settings.lines=settings.lines.map(n=>other.some(([a])=>a===n)?n:'');
+ settings.locks=settings.locks.filter(i=>Boolean(settings.lines[i]));
  settings.targets=settings.targets.filter(n=>other.some(([a])=>a===n));
  const aTargets=settings.wanted.length?settings.wanted:sl.target?[sl.target]:[];
  const a=soulOutcome(pool,sl.lines,saved,aTargets);
@@ -172,12 +189,18 @@ function renderSoulComparison(pools,sl,saved){
  const summary=r=>r.message||`${pct(r.p)} per reroll · Reroll ${r.candidates.map(i=>esc(SOUL_LINES[i])).join(' or ')}${r.candidates.length>1?' (same next-roll odds)':''}`;
  let diff='';if(a.p!=null&&b.p!=null){const d=(a.p-b.p)*100;diff=Math.abs(d)<1e-9?'Same next-roll odds.':`${d>0?'Item A':'Item B'} leads by ${Math.abs(d).toLocaleString('en-US',{maximumFractionDigits:6})} percentage points.`;}
  const opts='<option value="">(empty)</option>'+soulOptions(other.map(([n,,r])=>[n,r,n,n]),settings.slot);
- box.innerHTML=`<details ${box.querySelector('details')?.open||settings.wanted.length?'open':''}><summary>Wanted stats for Item A (${settings.wanted.length} selected)</summary><p>Select any acceptable stats. Clear the checklist to use the single-target dropdown.</p><div data-wanted="wanted">${soulWantedOptions(pool,sl.slot,sl.lines,settings.wanted)}</div></details>
+ box.innerHTML=`<details ${box.querySelector('details')?.open||settings.wanted.length?'open':''}><summary>Wanted stats for Item A (${settings.wanted.length} selected)</summary><p>Select any acceptable stats. Clear the checklist to use the single-target dropdown.</p>${settings.wanted.length?'<button type="button" data-clear-wanted="wanted">Clear all</button>':''}<div data-wanted="wanted">${soulWantedOptions(pool,sl.slot,sl.lines,settings.wanted)}</div></details>
  <p><label><input type="checkbox" data-compare ${settings.compare?'checked':''}> Compare with another item</label></p>
  ${settings.compare?`<section><h3>Item B</h3><label>Slot <select data-bslot>${slots.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>
  <div>${settings.lines.map((n,i)=>`<div><label>${esc(SOUL_LINES[i])} <select data-bline="${i}">${opts}</select></label> <label><input type="checkbox" data-block="${i}" ${settings.locks.includes(i)?'checked':''} ${n?'':'disabled'}> Locked</label></div>`).join('')}</div>
- <details ${box.querySelector('[data-bdetails]')?.open||!settings.targets.length?'open':''} data-bdetails><summary>Wanted stats for Item B (${settings.targets.length} selected)</summary><div data-wanted="targets">${soulWantedOptions(other,settings.slot,settings.lines,settings.targets)}</div></details>
- <h3>Next-roll comparison</h3><p>Item A (${esc(sl.slot)}): ${summary(a)}</p><p>Item B (${esc(settings.slot)}): ${summary(b)}</p><p>${diff}</p></section>`:''}`;
+ <details ${box.querySelector('[data-bdetails]')?.open||!settings.targets.length?'open':''} data-bdetails><summary>Wanted stats for Item B (${settings.targets.length} selected)</summary>${settings.targets.length?'<button type="button" data-clear-wanted="targets">Clear all</button>':''}<div data-wanted="targets">${soulWantedOptions(other,settings.slot,settings.lines,settings.targets)}</div></details>
+ <p class="muted">${soulRateNote(settings.slot,sl.className)}</p><h3>Next-roll comparison</h3><p>Item A (${esc(sl.slot)} · ${soulClassName(sl.className)}): ${summary(a)}</p><p>Item B (${esc(settings.slot)} · ${soulClassName(sl.className)}): ${summary(b)}</p><p>${diff}</p></section>`:''}`;
+ box.onclick=e=>{
+ const button=e.target.closest('[data-clear-wanted]');if(!button)return;
+ const key=button.dataset.clearWanted;if(key!=='wanted'&&key!=='targets')return;
+ settings[key]=[];save();renderSoul();
+ box.querySelector(`[data-wanted="${key}"]`)?.closest('details')?.querySelector('summary')?.focus();
+ };
  box.onchange=e=>{const x=e.target, group=x.closest('[data-wanted]');
  if(group)settings[group.dataset.wanted]=Array.from(group.querySelectorAll('input:checked'),c=>c.value);
  else if(x.matches('[data-compare]'))settings.compare=x.checked;
@@ -194,7 +217,20 @@ function renderSoulComparison(pools,sl,saved){
 
 function renderSoul(){const pools=soulPools(),sl=state.soul,slots=Object.keys(pools);if(!pools[sl.slot])sl.slot=slots[0];
 $('sslot').innerHTML=slots.map(s=>`<option>${esc(s)}</option>`).join('');$('sslot').value=sl.slot;
-const pool=pools[sl.slot],nm=pool.map(p=>p[0]),w=pool.map(p=>+p[1]),W=w.reduce((a,b)=>a+b,0),idx=n=>nm.indexOf(n);
+sl.className??='Gladiator';
+let classBox=$('soul-class-box');
+if(!classBox){classBox=document.createElement('div');classBox.id='soul-class-box';$('sslot').closest('label')?.before(classBox);if(!classBox.isConnected)$('sslot').before(classBox);}
+const classFocused=classBox.contains(document.activeElement);
+classBox.innerHTML=soulClassSelect(sl.className,'data-aclass')+`<p class="muted">${soulRateNote(sl.slot,sl.className)}</p>`;
+const classInput=classBox.querySelector('select');if(classFocused)classInput.focus();
+classInput.onchange=()=>{
+ sl.className=classInput.value;
+ const names=new Set(soulPoolFor(pools[sl.slot],sl.slot,sl.className).map(([n])=>n));
+ const current=state.soulLocks?.[sl.slot];if(Array.isArray(current))state.soulLocks[sl.slot]=current.filter(i=>names.has(sl.lines[i]));
+ if(state.soulUpgrades)state.soulUpgrades.wanted=state.soulUpgrades.wanted.filter(n=>names.has(n));
+ renderSoul();save();
+};
+const pool=soulPoolFor(pools[sl.slot],sl.slot,sl.className),nm=pool.map(p=>p[0]),w=pool.map(p=>+p[1]),W=w.reduce((a,b)=>a+b,0),idx=n=>nm.indexOf(n);
 if(idx(sl.target)<0)sl.target='';sl.lines=sl.lines.map(n=>idx(n)<0?'':n);
 const opts='<option value="">(empty)</option>'+soulOptions(pool.map(([n,w,r])=>[n,r,n,n]),sl.slot);
 $('starget').innerHTML='<option value="">Select a stat…</option>'+soulOptions(pool.map(([n,,r])=>[n,r,n,n]),sl.slot);$('starget').value=sl.target;
