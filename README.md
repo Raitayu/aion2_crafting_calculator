@@ -1,4 +1,4 @@
-# AION2 EU Craft Planner v10.0
+# AION2 EU Craft Planner v11
 
 A small local calculator for AION2 EU crafting costs. It models the Star / Dark / Ebony Dragon Lord evolution chains, the 25% combo chance, owned materials, Balaur buy-or-craft decisions, and market prices fetched from aion2.exchange for your EU server.
 
