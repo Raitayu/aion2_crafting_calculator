@@ -65,11 +65,12 @@
 /*mat-rarity-v1*/
 #mtable td:nth-child(3),#mtable th:nth-child(3){text-align:left}
 #mtable td.rar{font-weight:600}
-#mtable .rar-common{color:#d5dce8}
-#mtable .rar-rare{color:#6db3ff}
-#mtable .rar-epic{color:#c792ff}
-#mtable .rar-unique{color:#ffb454}
-#mtable .rar-heroic{color:#ff7a7a}
+#mtable .rar-common{color:#f4f6fa}
+#mtable .rar-rare{color:#5fd678}
+#mtable .rar-epic{color:#52a5ff}
+#mtable .rar-unique{color:#f8d03e}
+#mtable .rar-heroic{color:#ff5f5f}
+#mtable .rar-mythic{color:#bb78ff}
 /*mat-groups-v1*/
 #mtable tr.mgroup td{background:#101925;color:#e8c577;font-weight:700;font-size:16px;text-align:left;border-top:3px solid #e8c577;border-bottom:1px solid #52617a;padding:.8rem .6rem .5rem}
 #mtable tr.mgroup td span{color:#aab6c9;font-weight:400;font-size:13px}
@@ -197,7 +198,7 @@ for(const [k,grp] of allMaterials())if(grp!=='Gear')add(k);
 for(const r of COOK)for(const [k] of r.inputs)add(k);
 for(const [k,i] of catalog)if(/^(600|610)/.test(String(i.item_key)))add(k);
 return out;}
-const MAT_RARITIES=['Common','Rare','Epic','Unique','Heroic'];
+const MAT_RARITIES=['Common','Rare','Epic','Unique','Heroic','Mythic'];
 function matRarity(k){
 if(/^(Wrathful (Mind|Will|Ego)|Artisan's Ultimate Refining Stone)$/.test(k)||/^Radiant /.test(k)||/(Robust|Hardbound) Balaur/.test(k))return 'Unique';
 if(/^Maddened |^Rampaging /.test(k))return 'Heroic';
