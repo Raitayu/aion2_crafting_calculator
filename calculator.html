@@ -62,6 +62,17 @@
 #mtable td:nth-child(2),#mtable th:nth-child(2),#mtable td:last-child,#mtable th:last-child{text-align:left}
 #mtable td:last-child{white-space:pre-line}
 #msummary{margin:.5rem 0}
+/*mat-rarity-v1*/
+#mtable td:nth-child(3),#mtable th:nth-child(3){text-align:left}
+#mtable td.rar{font-weight:600}
+#mtable .rar-common{color:#d5dce8}
+#mtable .rar-rare{color:#6db3ff}
+#mtable .rar-epic{color:#c792ff}
+#mtable .rar-unique{color:#ffb454}
+#mtable .rar-heroic{color:#ff7a7a}
+/*mat-groups-v1*/
+#mtable tr.mgroup td{background:#101925;color:#e8c577;font-weight:700;font-size:16px;text-align:left;border-top:3px solid #e8c577;border-bottom:1px solid #52617a;padding:.8rem .6rem .5rem}
+#mtable tr.mgroup td span{color:#aab6c9;font-weight:400;font-size:13px}
 </style><h1>AION2 EU Craft Planner · v<span id="ver"></span></h1>
 <div id="update" role="status" hidden></div>
 <section><label>EU server <select id="server"></select></label><span id="serverlabel"></span> <button id="quit" title="Stop the local program">Exit app</button> <button id="ucheck">Check for updates</button> <span id="ustatus" class="muted"></span><div class="main-tabs" role="group" aria-label="Calculator sections"><button id="tabP" class="tab on">Crafting Prices</button><button id="tabC" class="tab">Splendent Prices</button><span class="tab-divider" aria-hidden="true"></span><button id="tabM" class="tab">Material Prices</button><button id="tabO" class="tab">Owned Materials</button><span class="tab-divider" aria-hidden="true"></span><button id="tabK" class="tab">Cooking</button><span class="tab-divider" aria-hidden="true"></span><button id="tabS" class="tab">Soulbind Odds</button><button id="tabL" class="tab">Soulbind Pools</button></div></section>
@@ -177,19 +188,29 @@ $('prices').innerHTML='<table><tr><th>Item</th><th>Market price</th><th>Status /
 renderRefresh();}
 function allMaterials(){const m=new Map();for(const fam of Object.values(pack.families))m.set(fam.base,'Gear');for(const fam of Object.values(pack.families))for(const s of fam.stages)for(const [k] of s.inputs)if(!m.has(k))m.set(k,(info(k)||k===E)?'Balaur':'Other');return m;}
 const MAT_ORDER=['Balaur materials','Ore & ingots','Wood','Gems','Odyle','Leather','Herbs & food','Refining stones','Other materials'];
-function matGroup(k){if(/Balaur/.test(k))return'Balaur materials';if(/Refining Stone/.test(k))return'Refining stones';if(/Orichalcum/.test(k))return'Ore & ingots';if(/Odyle/.test(k))return'Odyle';if(/(Diamond|Ruby|Sapphire)/.test(k))return'Gems';if(/(Asvata|Yggdrasil)/.test(k))return'Wood';if(/Leather/.test(k))return'Leather';if(/^(Fresh |Soft )|^(Aria|Azpha|Calendula|Conide|Coriolus|Cypri|Inina|Kukuru|Mela|Morfa|Ohkra|Pujery|Raydam|Targena)$/.test(k))return'Herbs & food';return'Other materials';}
-function matRows(){const out=[],seen=new Set(),add=k=>{if(!seen.has(k)&&!(k in VENDOR_DEFAULT)){seen.add(k);out.push([k,matGroup(k)]);}};
+const MAT_FACTION={"Aria":"Elyos","Fresh Aria":"Elyos","Targena":"Elyos","Fresh Targena":"Elyos","Mela":"Elyos","Fresh Mela":"Elyos","Cypri":"Elyos","Fresh Cypri":"Elyos","Kukuru":"Elyos","Fresh Kukuru":"Elyos","Inina":"Elyos","Fresh Inina":"Elyos","Coriolus":"Elyos","Fresh Coriolus":"Elyos","Azpha":"Asmodian","Fresh Azpha":"Asmodian","Calendula":"Asmodian","Fresh Calendula":"Asmodian","Raydam":"Asmodian","Fresh Raydam":"Asmodian","Pujery":"Asmodian","Fresh Pujery":"Asmodian","Ohkra":"Asmodian","Fresh Ohkra":"Asmodian","Conide":"Asmodian","Fresh Conide":"Asmodian","Morfa":"Asmodian","Fresh Morfa":"Asmodian"};
+function matFaction(){return DATA.servers.find(x=>String(x.id)===String(server))?.faction||'';}
+function matFits(k){const f=MAT_FACTION[k]||(/Yggdrasil/.test(k)?'Elyos':/Asvata/.test(k)?'Asmodian':''),mine=matFaction();return !f||!mine||f===mine;}
+function matGroup(k){if(/^Wrathful /.test(k))return'Wrathful Materials';if(/Balaur/.test(k))return'Balaur materials';if(/Refining Stone/.test(k))return'Refining stones';if(/Orichalcum/.test(k))return'Ore & ingots';if(/Odyle/.test(k))return'Odyle';if(/(Diamond|Ruby|Sapphire)/.test(k))return'Gems';if(/(Asvata|Yggdrasil)/.test(k))return'Wood';if(/Leather/.test(k))return'Leather';if(/^(Fresh |Soft )|^(Aria|Azpha|Calendula|Conide|Coriolus|Cypri|Inina|Kukuru|Mela|Morfa|Ohkra|Pujery|Raydam|Targena)$/.test(k))return'Herbs & food';return'Other materials';}
+function matRows(){const out=[],seen=new Set(),add=k=>{if(!seen.has(k)&&!(k in VENDOR_DEFAULT)&&matFits(k)){seen.add(k);out.push([k,matGroup(k)]);}};
 for(const [k,grp] of allMaterials())if(grp!=='Gear')add(k);
 for(const r of COOK)for(const [k] of r.inputs)add(k);
 for(const [k,i] of catalog)if(/^(600|610)/.test(String(i.item_key)))add(k);
 return out;}
+const MAT_RARITIES=['Common','Rare','Epic','Unique','Heroic'];
+function matRarity(k){
+if(/^(Wrathful (Mind|Will|Ego)|Artisan's Ultimate Refining Stone)$/.test(k)||/^Radiant /.test(k)||/(Robust|Hardbound) Balaur/.test(k))return 'Unique';
+if(/^Maddened |^Rampaging /.test(k))return 'Heroic';
+if(/^Pure /.test(k)||/^(Fine|Tanned|Enhanced) (Thick|Hard|Durable) Balaur (Horn|Leather|Scale)$/.test(k)||/^(Balaur's Essence|Artisan's Refining Stone)$/.test(k))return 'Epic';
+if(/^Fine /.test(k)||/^Fresh (Aria|Targena|Azpha|Calendula)$/.test(k)||/^(Expert's Refining Stone|Soft Balaur Meat)$/.test(k))return 'Rare';
+return 'Common';}
 function renderMat(){const q=String(state.ui.msearch||'').trim().toLowerCase();
 if(document.activeElement!==$('msearch'))$('msearch').value=state.ui.msearch||'';
-const all=matRows().map(([k,grp])=>{const c=cache()[k],pr=valid(c?.price)?+c.price:null;return{k,grp,pr,li:listingsOf(k),info:readable(c?.label)};}).sort((a,b)=>a.grp.localeCompare(b.grp)||a.k.localeCompare(b.k));
-const rows=all.filter(r=>!q||r.k.toLowerCase().includes(q)||r.grp.toLowerCase().includes(q));
+const all=matRows().map(([k,grp])=>{const c=cache()[k],pr=valid(c?.price)?+c.price:null,rar=matRarity(k);return{k,grp,rar,rk:MAT_RARITIES.indexOf(rar),pr,li:listingsOf(k),info:readable(c?.label)};}).sort((a,b)=>a.grp.localeCompare(b.grp)||a.rk-b.rk||a.k.localeCompare(b.k));
+const rows=all.filter(r=>!q||r.k.toLowerCase().includes(q)||r.grp.toLowerCase().includes(q)||r.rar.toLowerCase().includes(q));
 const sv=$('server').selectedOptions[0]?.textContent||'your server';
-$('msummary').textContent=rows.length+' of '+all.length+' items shown · '+all.filter(r=>r.pr!=null).length+' have a price on '+sv;
-$('mtable').innerHTML='<table><tr><th>Item</th><th>Group</th><th>Market price</th><th>Listings</th><th>Status / captured</th></tr>'+rows.map(r=>`<tr><td>${esc(r.k)}</td><td>${esc(r.grp)}</td><td>${r.pr==null?'–':fmt(r.pr)}</td><td>${r.li==null?'–':fmt(r.li)}</td><td class="muted">${esc(r.info)}</td></tr>`).join('')+(rows.length?'':'<tr><td colspan="5" class="muted">No items match the filter.</td></tr>')+'</table>';}
+$('msummary').textContent=rows.length+' of '+all.length+' items shown · '+all.filter(r=>r.pr!=null).length+' have a price on '+sv+' · '+matFaction()+' and shared items';
+$('mtable').innerHTML='<table><tr><th>Item</th><th>Rarity</th><th>Group</th><th>Market price</th><th>Listings</th><th>Status / captured</th></tr>'+rows.map((r,i)=>(i===0||rows[i-1].grp!==r.grp?`<tr class="mgroup"><td colspan="6">${esc(r.grp)} <span>· ${rows.filter(x=>x.grp===r.grp).length} item${rows.filter(x=>x.grp===r.grp).length===1?'':'s'}</span></td></tr>`:'')+`<tr><td>${esc(r.k)}</td><td class="rar rar-${r.rar.toLowerCase()}">${esc(r.rar)}</td><td>${esc(r.grp)}</td><td>${r.pr==null?'–':fmt(r.pr)}</td><td>${r.li==null?'–':fmt(r.li)}</td><td class="muted">${esc(r.info)}</td></tr>`).join('')+(rows.length?'':'<tr><td colspan="6" class="muted">No items match the filter.</td></tr>')+'</table>';}
 function renderOwned(){const ui=state.ui,fee=Math.max(0,+ui.fee||0)/100,reg=Math.max(0,+ui.reg||0)/100,q=String(ui.osearch||'').trim().toLowerCase();
 let rows=[...allMaterials()].map(([k,grp])=>{const n=state.inv[k]||0,pr=valid(cache()[k]?.price)?+cache()[k].price:null,gross=pr==null?null:n*pr;return{k,grp,n,pr,gross,sf:gross==null?null:gross*fee,rf:gross==null?null:gross*reg,net:gross==null?null:gross*(1-fee-reg)};}).filter(r=>(ui.ogroup==='All'||r.grp===ui.ogroup)&&(!q||r.k.toLowerCase().includes(q))&&(!ui.oonly||r.n>0));
 const num=(a,b,key)=>(b[key]??-Infinity)-(a[key]??-Infinity);rows.sort(ui.osort==='net'?(a,b)=>num(a,b,'net')||a.k.localeCompare(b.k):ui.osort==='owned'?(a,b)=>num(a,b,'n')||a.k.localeCompare(b.k):ui.osort==='price'?(a,b)=>num(a,b,'pr')||a.k.localeCompare(b.k):(a,b)=>a.k.localeCompare(b.k));
