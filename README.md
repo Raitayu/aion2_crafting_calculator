@@ -54,7 +54,7 @@ Shows whether crafting food to sell is worth it, using vendor ingredient costs i
 
 ### Character
 
-Look up an EU character by name and server to see their equipment and soulbind lines. The tab also holds the damage model and reroll advice below.
+Look up an EU character by name and server to see their equipment and soulbind lines. The tab also holds the damage model, reroll advice and line editor below.
 
 ## Damage model and reroll advice
 
@@ -65,11 +65,16 @@ The model ranks soulbind rerolls by modeled damage. It is a comparison tool, not
 - Combat Speed counts as extra hits per second, scaled by a "counts for" percentage (100% means all your damage speeds up).
 - Skills (Gladiator for now): Overhead Slam, Rending Blow and Ruinous Blow use per-level damage data. Enter each skill's total level and its share of your damage.
 - Passives (Gladiator): Identify Weakness, Attack Preparation, Impact Hit, Experienced Counterstrike and Murderous Burst convert each rank into the stats it gives. Buff uptimes are editable.
+- Every line is compared at its maximum roll, both your current lines and the possible rerolls, so a line is always compared with another maximum roll.
 - Reroll ranking simulates your next rerolls (10 by default), including the fact that a removed stat returns to the pool. Ties go to the line with the lowest pool chance.
-- Skill lines sitting exactly on a Specialty level (8, 12, 16 or 20) are never suggested for rerolling. Set "Protect Specialty levels" to 0 to allow it.
+- Skill lines sitting exactly on a Specialty level (8, 12, 16 or 20) are never suggested for rerolling, and Move Speed on earrings and boots is never suggested either. Set "Protect Specialty levels and kept lines" to 0 to allow both.
 - Specialty options are not valued by the model, and other classes' skills count as 0 until their data is added.
 
-To add a class, add lines to `DMG_SKILL_LIST` (skills) or `DMG_PASSIVES` (passives) in `calculator.html`.
+To add a class, add lines to `DMG_SKILL_LIST` (skills) or `DMG_PASSIVES` (passives) in `calculator.html`. To keep another line on a slot, add it to `DMG_KEEP`.
+
+### Set my current lines
+
+The official site can lag behind the game by minutes or more, so a line you just rolled may not show up yet. Under the reroll table, each equipped slot has an editor: pick the stat you rolled and the advice updates at once. A stat the item already has cannot be picked, because a reroll can never land on it. Edits are remembered in your browser per character and item, and they clear on their own when the loaded data shows the same lines. After gaining or losing a skill line, also update that skill's level under Skills.
 
 ## Updates
 
@@ -80,7 +85,7 @@ The page checks the newest GitHub release and shows a banner when a newer versio
 - The relay listens on 127.0.0.1 only and accepts only requests from the calculator page.
 - It contacts only aion2.exchange (prices) and the official AION 2 character pages, for EU servers only.
 - Character requests are spaced out and cached for 10 minutes. Nothing is sent anywhere else.
-- Prices, owned items, recipe edits and model settings are saved in your browser. Use Export prices and Export recipes to keep backups.
+- Prices, owned items, recipe edits, model settings and line edits are saved in your browser. Use Export prices and Export recipes to keep backups.
 - Initial Quai prices are an old snapshot. Click Fetch Prices before relying on them.
 - Dragon Lord intermediates are not bought automatically. Balaur is the only material sub-recipe.
 
