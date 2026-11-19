@@ -74,6 +74,19 @@
 /*mat-groups-v1*/
 #mtable tr.mgroup td{background:#101925;color:#e8c577;font-weight:700;font-size:16px;text-align:left;border-top:3px solid #e8c577;border-bottom:1px solid #52617a;padding:.8rem .6rem .5rem}
 #mtable tr.mgroup td span{color:#aab6c9;font-weight:400;font-size:13px}
+/*soul-cost-v1*/
+#pSoul .soul-cost-grid{display:grid;grid-template-columns:12rem minmax(0,22rem);gap:.45rem .6rem;align-items:center;margin:.4rem 0}
+#pSoul .soul-cost-grid label{margin:0;color:#aab6c9}
+#pSoul .soul-cost-grid input,#pSoul .soul-cost-grid select{width:100%;margin:0;box-sizing:border-box}
+/*mat-change-v1*/
+#mtable .chg{font-size:12px;font-weight:600;white-space:nowrap;margin-left:.35rem}
+#mtable .chg.up{color:#5fd678}
+#mtable .chg.down{color:#ff6b6b}
+/*soul-cost-v2*/
+#pSoul .soul-cost-grid{display:grid;grid-template-columns:12rem minmax(0,26rem);gap:.45rem .6rem;align-items:center;margin:.4rem 0}
+#pSoul .soul-cost-grid label{margin:0;color:#aab6c9}
+#pSoul .soul-cost-grid input,#pSoul .soul-cost-grid select{width:100%;margin:0;box-sizing:border-box}
+#pSoul #scinfo{margin:.3rem 0 .6rem}
 </style><h1>AION2 EU Craft Planner · v<span id="ver"></span></h1>
 <div id="update" role="status" hidden></div>
 <section><label>EU server <select id="server"></select></label><span id="serverlabel"></span> <button id="quit" title="Stop the local program">Exit app</button> <button id="ucheck">Check for updates</button> <span id="ustatus" class="muted"></span><div class="main-tabs" role="group" aria-label="Calculator sections"><button id="tabP" class="tab on">Crafting Prices</button><button id="tabC" class="tab">Splendent Prices</button><span class="tab-divider" aria-hidden="true"></span><button id="tabM" class="tab">Material Prices</button><button id="tabO" class="tab">Owned Materials</button><span class="tab-divider" aria-hidden="true"></span><button id="tabK" class="tab">Cooking</button><span class="tab-divider" aria-hidden="true"></span><button id="tabS" class="tab">Soulbind Odds</button><button id="tabL" class="tab">Soulbind Pools</button></div></section>
@@ -102,6 +115,7 @@
 <div class="soul-grid" role="group" aria-label="Item lines"><label class="soul-lbl" for="sslot">Slot</label><select id="sslot"></select><label class="soul-lbl" for="sl0">Line 1</label><select id="sl0"></select><label class="soul-lbl" for="sl1">Line 2</label><select id="sl1"></select><label class="soul-lbl" for="sl2">Line 3</label><select id="sl2"></select><label class="soul-lbl" for="sl3">Line 4</label><select id="sl3"></select><label class="soul-lbl" for="sl4">Line 5</label><select id="sl4"></select><label class="soul-lbl" for="sl5">Soulfuse</label><select id="sl5"></select><div id="slocks" role="group" aria-label="Lock lines"></div></div>
 <p class="muted soul-note">Line 4, Line 5 and Soulfuse are optional. Click a padlock to leave that line untouched.</p>
 <div class="soul-target"><label>Stat you want <select id="starget"></select></label> <span id="srange" class="muted"></span></div><input type="hidden" id="sline"><span id="sadvice" class="muted"></span>
+<details id="soul-cost" open><summary>Reroll cost</summary><div class="soul-cost-grid"><label for="scstones">Sync Stones in stock</label><input id="scstones" type="number" min="0" step="1" inputmode="numeric"><label for="scitem">Fodder price source</label><select id="scitem"></select><label for="scfodder">Fodder price (kina)</label><input id="scfodder" type="number" min="0" step="1" inputmode="numeric"></div><p><button type="button" id="scfetch">Fetch prices</button> <span id="scstatus" class="muted" role="status"></span></p><div id="scinfo" class="muted"></div><p class="muted">One reroll uses one Sync Stone or one Unique gear piece as fodder. Sync Stones are bound to your character and can't be sold, so they are used first and count as free. The fodder price is the average of the 10 cheapest Unique pieces on the market (each item's lowest listing), or any price you type in.</p></details>
 <div id="sresult"></div></section>
 </div><div id="pPools" hidden><section><h2>Soulbind Pools</h2><p class="muted">Choose a slot, then edit one row per stat. Changes are saved in this browser. Custom pools override the built-in pool for all classes on that slot.</p><label>Slot name <select id="sname"></select></label> <button type="button" id="snew">New slot</button><p id="spoolhint" class="muted"></p><div class="scroll"><table><thead><tr><th>Stat name</th><th>Base chance (%)</th><th>Roll range (optional)</th><th></th></tr></thead><tbody id="spool"></tbody></table></div><p><button type="button" id="sadd">Add line</button> <output id="stotal"></output></p><p><button type="button" id="ssave">Save pool</button> <button type="button" id="sdel">Reset custom pool</button> <span id="smsg" role="status"></span></p></section></div>
 <div id="pCraft" hidden><section><h2>Craft vs buy: Artisan’s Splendent items</h2><p class="muted">Expected cost of crafting every Artisan’s Splendent item from scratch, compared with its current market price on your selected server, grouped like aion2.exchange into Weapons, Armors and Jewelry. The numbers come from the crafting model published by aion2.exchange (<code>/api/crafts</code>), which accounts for the 25% combo chance across the lower tiers; this planner does not recompute them. Field meanings are inferred from the field names because the API is not documented.</p><label>Show <select id="ccat"><option value="All">All items</option><option value="Weapon">Weapons</option><option value="Armor">Armors</option><option value="Accessory">Jewelry</option></select></label><label>Sort within group <select id="csort"><option value="saving">Biggest saving from crafting first</option><option value="margin">Margin (highest first)</option><option value="profit">Profit after fees (highest first)</option><option value="name">Name</option></select></label><label>Sale fee % <input id="cfee" type="number" min="0" max="100" step="0.1" style="width:65px"></label><label>Registration fee % <input id="creg" type="number" min="0" max="100" step="0.1" style="width:65px"></label><button id="cfetch">Fetch crafting costs</button><p id="cstatus" role="status"></p><div id="csummary"></div><div id="cmodel" class="muted"></div><div id="ctable" class="scroll"></div><p class="muted">“Craft cost” is the API’s <code>cost</code> field and “If inputs bought at market” is its <code>cost_market</code>. “Margin” is the market price minus the craft cost, as a percentage of the craft cost: positive means crafting is cheaper, negative means buying is cheaper. “Profit after fees” assumes you craft the item and sell it at the current market price: market price minus the sale fee and the registration fee, minus the craft cost. The fee percentages are the same ones used in the Owned materials tab. It assumes the item sells at that price; a lower sale price or an unsold listing (the registration fee is still lost) would reduce it. The model assumes the mastery level and carry time shown above, so your own results can differ. “Expected crafts per tier” lists the API’s <code>attempts</code> values in the order returned. Items with no market listing cannot be compared. Your owned quantity is shown next to an item only when its name matches an item in your Owned materials list exactly.</p></section></div>
@@ -205,13 +219,14 @@ if(/^Maddened |^Rampaging /.test(k))return 'Heroic';
 if(/^Pure /.test(k)||/^(Fine|Tanned|Enhanced) (Thick|Hard|Durable) Balaur (Horn|Leather|Scale)$/.test(k)||/^(Balaur's Essence|Artisan's Refining Stone)$/.test(k))return 'Epic';
 if(/^Fine /.test(k)||/^Fresh (Aria|Targena|Azpha|Calendula)$/.test(k)||/^(Expert's Refining Stone|Soft Balaur Meat)$/.test(k))return 'Rare';
 return 'Common';}
+function matChg(r){if(r.pr==null||!(r.prev>0))return '';const d=(r.pr-r.prev)/r.prev*100,up=d>0,txt=(up?'▲ +':'▼ −')+Math.abs(d).toLocaleString('en-US',{maximumFractionDigits:1})+'%';return ` <span class="chg ${up?'up':'down'}" title="${up?'Up':'Down'} from ${fmt(r.prev)} at the last price change">${txt}</span>`;}
 function renderMat(){const q=String(state.ui.msearch||'').trim().toLowerCase();
 if(document.activeElement!==$('msearch'))$('msearch').value=state.ui.msearch||'';
-const all=matRows().map(([k,grp])=>{const c=cache()[k],pr=valid(c?.price)?+c.price:null,rar=matRarity(k);return{k,grp,rar,rk:MAT_RARITIES.indexOf(rar),pr,li:listingsOf(k),info:readable(c?.label)};}).sort((a,b)=>a.grp.localeCompare(b.grp)||a.rk-b.rk||a.k.localeCompare(b.k));
+const all=matRows().map(([k,grp])=>{const c=cache()[k],pr=valid(c?.price)?+c.price:null,rar=matRarity(k);return{k,grp,rar,rk:MAT_RARITIES.indexOf(rar),pr,prev:valid(c?.prev)?+c.prev:null,li:listingsOf(k),info:readable(c?.label)};}).sort((a,b)=>a.grp.localeCompare(b.grp)||a.rk-b.rk||a.k.localeCompare(b.k));
 const rows=all.filter(r=>!q||r.k.toLowerCase().includes(q)||r.grp.toLowerCase().includes(q)||r.rar.toLowerCase().includes(q));
 const sv=$('server').selectedOptions[0]?.textContent||'your server';
 $('msummary').textContent=rows.length+' of '+all.length+' items shown · '+all.filter(r=>r.pr!=null).length+' have a price on '+sv+' · '+matFaction()+' and shared items';
-$('mtable').innerHTML='<table><tr><th>Item</th><th>Rarity</th><th>Group</th><th>Market price</th><th>Listings</th><th>Status / captured</th></tr>'+rows.map((r,i)=>(i===0||rows[i-1].grp!==r.grp?`<tr class="mgroup"><td colspan="6">${esc(r.grp)} <span>· ${rows.filter(x=>x.grp===r.grp).length} item${rows.filter(x=>x.grp===r.grp).length===1?'':'s'}</span></td></tr>`:'')+`<tr><td>${esc(r.k)}</td><td class="rar rar-${r.rar.toLowerCase()}">${esc(r.rar)}</td><td>${esc(r.grp)}</td><td>${r.pr==null?'–':fmt(r.pr)}</td><td>${r.li==null?'–':fmt(r.li)}</td><td class="muted">${esc(r.info)}</td></tr>`).join('')+(rows.length?'':'<tr><td colspan="6" class="muted">No items match the filter.</td></tr>')+'</table>';}
+$('mtable').innerHTML='<table><tr><th>Item</th><th>Rarity</th><th>Group</th><th>Market price</th><th>Listings</th><th>Status / captured</th></tr>'+rows.map((r,i)=>(i===0||rows[i-1].grp!==r.grp?`<tr class="mgroup"><td colspan="6">${esc(r.grp)} <span>· ${rows.filter(x=>x.grp===r.grp).length} item${rows.filter(x=>x.grp===r.grp).length===1?'':'s'}</span></td></tr>`:'')+`<tr><td>${esc(r.k)}</td><td class="rar rar-${r.rar.toLowerCase()}">${esc(r.rar)}</td><td>${esc(r.grp)}</td><td>${r.pr==null?'–':fmt(r.pr)}${matChg(r)}</td><td>${r.li==null?'–':fmt(r.li)}</td><td class="muted">${esc(r.info)}</td></tr>`).join('')+(rows.length?'':'<tr><td colspan="6" class="muted">No items match the filter.</td></tr>')+'</table>';}
 function renderOwned(){const ui=state.ui,fee=Math.max(0,+ui.fee||0)/100,reg=Math.max(0,+ui.reg||0)/100,q=String(ui.osearch||'').trim().toLowerCase();
 let rows=[...allMaterials()].map(([k,grp])=>{const n=state.inv[k]||0,pr=valid(cache()[k]?.price)?+cache()[k].price:null,gross=pr==null?null:n*pr;return{k,grp,n,pr,gross,sf:gross==null?null:gross*fee,rf:gross==null?null:gross*reg,net:gross==null?null:gross*(1-fee-reg)};}).filter(r=>(ui.ogroup==='All'||r.grp===ui.ogroup)&&(!q||r.k.toLowerCase().includes(q))&&(!ui.oonly||r.n>0));
 const num=(a,b,key)=>(b[key]??-Infinity)-(a[key]??-Infinity);rows.sort(ui.osort==='net'?(a,b)=>num(a,b,'net')||a.k.localeCompare(b.k):ui.osort==='owned'?(a,b)=>num(a,b,'n')||a.k.localeCompare(b.k):ui.osort==='price'?(a,b)=>num(a,b,'pr')||a.k.localeCompare(b.k):(a,b)=>a.k.localeCompare(b.k));
@@ -282,6 +297,78 @@ function soulWantedOptions(pool,slot,lines,chosen){
  }).join('');
 }
 const LOCK_ICON={closed:'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',open:'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>'};
+const FODDER_LIST=[[110130002,"Weapon"],[110130003,"Weapon"],[110130006,"Weapon"],[110130007,"Weapon"],[110130011,"Weapon"],[110130012,"Weapon"],[110130014,"Weapon"],[110130019,"Weapon"],[110230002,"Weapon"],[110230003,"Weapon"],[110230006,"Weapon"],[110230007,"Weapon"],[110230011,"Weapon"],[110230014,"Weapon"],[110230019,"Weapon"],[110330002,"Weapon"],[110330003,"Weapon"],[110330006,"Weapon"],[110330007,"Weapon"],[110330011,"Weapon"],[110330012,"Weapon"],[110330014,"Weapon"],[110330019,"Weapon"],[110430002,"Weapon"],[110430003,"Weapon"],[110430006,"Weapon"],[110430007,"Weapon"],[110430011,"Weapon"],[110430012,"Weapon"],[110430014,"Weapon"],[110430019,"Weapon"],[110630002,"Weapon"],[110630003,"Weapon"],[110630006,"Weapon"],[110630007,"Weapon"],[110630011,"Weapon"],[110630012,"Weapon"],[110630014,"Weapon"],[110630019,"Weapon"],[110530002,"Weapon"],[110530003,"Weapon"],[110530006,"Weapon"],[110530007,"Weapon"],[110530011,"Weapon"],[110530012,"Weapon"],[110530014,"Weapon"],[110530019,"Weapon"],[110830002,"Weapon"],[110830003,"Weapon"],[110830006,"Weapon"],[110830007,"Weapon"],[110830011,"Weapon"],[110830012,"Weapon"],[110830014,"Weapon"],[110830019,"Weapon"],[110730002,"Weapon"],[110730003,"Weapon"],[110730006,"Weapon"],[110730007,"Weapon"],[110730011,"Weapon"],[110730014,"Weapon"],[110730019,"Weapon"],[115030002,"Weapon"],[115030003,"Weapon"],[115030006,"Weapon"],[115030007,"Weapon"],[115030011,"Weapon"],[115030014,"Weapon"],[115030019,"Weapon"],[210630011,"Armor"],[210130011,"Armor"],[210730011,"Armor"],[210530011,"Armor"],[210230011,"Armor"],[210330011,"Armor"],[210430011,"Armor"],[210630005,"Armor"],[210130005,"Armor"],[210730005,"Armor"],[210530005,"Armor"],[210230005,"Armor"],[210330005,"Armor"],[210430005,"Armor"],[210630002,"Armor"],[210130002,"Armor"],[210730002,"Armor"],[210530002,"Armor"],[210230002,"Armor"],[210330002,"Armor"],[210430002,"Armor"],[210630006,"Armor"],[210130006,"Armor"],[210730006,"Armor"],[210530006,"Armor"],[210230006,"Armor"],[210330006,"Armor"],[210430006,"Armor"],[210630019,"Armor"],[210730019,"Armor"],[210530019,"Armor"],[210330019,"Armor"],[210630001,"Armor"],[210130001,"Armor"],[210730001,"Armor"],[210530001,"Armor"],[210230001,"Armor"],[210330001,"Armor"],[210430001,"Armor"]];
+const FODDER_KEYS=new Map(FODDER_LIST.map(([k,c])=>[k,c]));
+const FODDER_PLURAL={Weapon:'weapons',Armor:'armor pieces',Accessory:'accessories',All:'weapons and armor pieces'};
+let FODDER_BUNDLED=null;
+function fodderStats(items){
+ const by={},out={at:'',groups:{}};
+ for(const i of items){const cat=FODDER_KEYS.get(+i.item_key);if(!cat)continue;
+  const ok=('on_market' in i?i.on_market:i.listed)!==false&&valid(i.price)&&+i.price>0;if(!ok)continue;
+  (by[cat]??=[]).push([i.name,+i.price]);if(i.captured_at&&String(i.captured_at)>out.at)out.at=String(i.captured_at);}
+ const mk=list=>{const low=[...list].sort((a,b)=>a[1]-b[1]).slice(0,10);return{n:list.length,used:low.length,avg:low.reduce((t,x)=>t+x[1],0)/low.length,low};};
+ const cats=Object.keys(by);for(const c of cats)out.groups[c]=mk(by[c]);
+ if(cats.length>1)out.groups.All=mk(cats.flatMap(c=>by[c]));
+ return out;
+}
+function fodderGroups(){const f=state.fodder?.[server]||(String(server)==='12317'?(FODDER_BUNDLED??=fodderStats(DATA.items)):null);return f?.groups||{};}
+function fodderAt(){const f=state.fodder?.[server]||(String(server)==='12317'?FODDER_BUNDLED:null);return f?.at||'';}
+function fodderChoice(){const g=fodderGroups(),u=state.ui.fodderSrc;if(u===''||(u&&g[u]))return u;const k=Object.keys(g);return k.includes('All')?'All':(k[0]||'');}
+const SOUL_RUNS_CACHE=new Map();
+function soulRuns(pool,lines,locked,targets){
+ const key=JSON.stringify([pool.map(p=>p[0]+':'+p[1]),lines,locked,targets]);
+ if(SOUL_RUNS_CACHE.has(key))return SOUL_RUNS_CACHE.get(key);
+ const names=pool.map(p=>p[0]),w=pool.map(p=>+p[1]),m=w.length,W=w.reduce((a,b)=>a+b,0),at=new Map(names.map((n,i)=>[n,i]));
+ const cur=lines.map(n=>n&&at.has(n)?at.get(n):-1),tgt=new Set(targets.filter(n=>at.has(n)).map(n=>at.get(n)));
+ const cand=[];lines.forEach((n,i)=>{if(cur[i]>=0&&!locked.includes(i)&&!tgt.has(cur[i]))cand.push(i);});
+ let res=null;
+ if(cand.length&&tgt.size&&m){
+  const runs=6000;let seed=20261119;const rnd=()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  res=new Uint32Array(runs);
+  for(let r=0;r<runs;r++){const c=cur.slice(),used=new Uint8Array(m);let excl=0;for(const i of c)if(i>=0){used[i]=1;excl+=w[i];}
+   let att=0;
+   while(att<50000){att++;let li=cand[0];for(const k of cand)if(w[c[k]]<w[c[li]]-1e-12)li=k;
+    let x=-1,rr=rnd()*(W-excl),last=-1;for(let i=0;i<m;i++){if(used[i])continue;last=i;rr-=w[i];if(rr<0){x=i;break;}}
+    if(x<0)x=last;if(x<0||tgt.has(x))break;
+    used[c[li]]=0;used[x]=1;excl+=w[x]-w[c[li]];c[li]=x;}
+   res[r]=att;}
+  res.sort();
+ }
+ if(SOUL_RUNS_CACHE.size>12)SOUL_RUNS_CACHE.delete(SOUL_RUNS_CACHE.keys().next().value);
+ SOUL_RUNS_CACHE.set(key,res);return res;
+}
+function soulCostInfo(){const u=state.ui,S=Math.max(0,Math.floor(+u.syncStones||0)),ch=fodderChoice();let P=null;
+ if(ch)P=Math.round(fodderGroups()[ch].avg);
+ else if(u.fodderPrice!==undefined&&u.fodderPrice!==''&&valid(u.fodderPrice))P=+u.fodderPrice;
+ return{S,P,ch};}
+function soulCostStats(res,S){const n=res.length,q=f=>res[Math.min(n-1,Math.floor(f*n))];let sum=0,fod=0;for(const x of res){sum+=x;if(x>S)fod+=x-S;}
+ return{mean:sum/n,fodder:fod/n,q50:q(0.5),q90:q(0.9),q99:q(0.99)};}
+function soulCostBlock(pool,lines,locked,targets){
+ const res=soulRuns(pool,lines,locked,targets);if(!res)return '';
+ const {S,P,ch}=soulCostInfo(),m=soulCostStats(res,S),r1=x=>fmt(Math.round(x*10)/10),kina=n=>P==null?'–':fmt(Math.round(n*P));
+ const row=(lab,n,f,avg)=>`<tr><td>${lab}</td><td>${avg?r1(n):fmt(n)}</td><td>${avg?r1(n-f):fmt(Math.min(n,S))}</td><td>${avg?r1(f):fmt(f)}</td><td>${kina(f)}</td></tr>`;
+ const rows=[row('Average',m.mean,m.fodder,true),row('Half of all runs (50%)',m.q50,Math.max(0,m.q50-S)),row('Plan for 90%',m.q90,Math.max(0,m.q90-S)),row('Plan for 99%',m.q99,Math.max(0,m.q99-S))].join('');
+ const price=P==null?' Enter a fodder price in the Reroll cost box above to see the kina cost.':` Each fodder piece is priced at ${fmt(P)} kina (${ch?'average of the '+fodderGroups()[ch].used+' cheapest Unique '+(FODDER_PLURAL[ch]||ch.toLowerCase()):'your entry'}).`;
+ return `<h3>Reroll cost</h3><div class="scroll"><table><tr><th>Scenario</th><th>Rerolls</th><th>Sync Stones used</th><th>Fodder pieces</th><th>Fodder cost (kina)</th></tr>${rows}</table></div><p class="muted">Simulated with the lowest-chance-line strategy (${fmt(res.length)} runs). Each reroll uses one Sync Stone or one Unique gear piece as fodder. Sync Stones are used first and count as free because they can't be sold.${price} The simulated table further down uses its own random sample, so averages can differ by a little.</p>`;
+}
+function soulCostCompare(a,b,poolA,sl,tA,savedA,poolB,st){
+ if(a.message||b.message)return '';
+ const rA=soulRuns(poolA,sl.lines,savedA,tA),rB=soulRuns(poolB,st.lines,st.locks,st.targets);if(!rA||!rB)return '';
+ const {S,P}=soulCostInfo(),r1=x=>fmt(Math.round(x*10)/10);
+ const row=(lab,res)=>{const m=soulCostStats(res,S);return `<tr><td>${lab}</td><td>${r1(m.mean)}</td><td>${r1(m.fodder)}</td><td>${P==null?'–':fmt(Math.round(m.fodder*P))}</td><td>${fmt(m.q90)}${P==null?'':' · '+fmt(Math.round(Math.max(0,m.q90-S)*P))}</td></tr>`;};
+ return `<h3>Expected reroll cost</h3><div class="scroll"><table><tr><th>Item</th><th>Average rerolls</th><th>Average fodder pieces</th><th>Average fodder cost (kina)</th><th>90% plan (rerolls${P==null?'':' · kina'})</th></tr>${row('Item A',rA)}${row('Item B',rB)}</table></div><p class="muted">Simulated for the recommended line on each item. Sync Stones in stock (${fmt(S)}) are used first.${P==null?' Enter a fodder price in the Reroll cost box to see kina.':''}</p>`;
+}
+function soulCostPanel(){const u=state.ui,sel=$('scitem'),f=$('scfodder'),st=$('scstones');if(!sel||!f||!st)return;
+ const g=fodderGroups(),keys=Object.keys(g).sort((a,b)=>a==='All'?-1:b==='All'?1:a.localeCompare(b));
+ const label=k=>'Average of the '+g[k].used+' cheapest Unique '+(FODDER_PLURAL[k]||k.toLowerCase())+' — '+fmt(Math.round(g[k].avg));
+ const html='<option value="">Enter a price manually</option>'+keys.map(k=>`<option value="${esc(k)}">${esc(label(k))}</option>`).join('');
+ if(sel.dataset.sig!==html){sel.innerHTML=html;sel.dataset.sig=html;}
+ const ch=fodderChoice();sel.value=ch;f.disabled=!!ch;
+ if(document.activeElement!==f)f.value=ch?String(Math.round(g[ch].avg)):(u.fodderPrice??'');
+ if(document.activeElement!==st)st.value=u.syncStones??'';
+ const info=$('scinfo');if(info){const gi=ch?g[ch]:null;
+  info.innerHTML=gi?`Based on the ${gi.used} lowest prices among ${gi.n} Unique ${FODDER_PLURAL[ch]||ch.toLowerCase()} currently listed${fodderAt()?' (captured '+esc(dt(fodderAt()))+')':''}: `+gi.low.map(([n,p])=>esc(n)+' '+fmt(p)).join(' · '):(keys.length?'':'No prices for the Unique items on this server yet. Click Fetch prices.');}
+}
 function renderSoulComparison(pools,sl,saved){
  const box=$('soul-upgrades');
  const settings=state.soulUpgrades??={wanted:[],compare:false,slot:sl.slot,lines:Array(6).fill(''),locks:[],targets:[]};
@@ -301,7 +388,7 @@ function renderSoulComparison(pools,sl,saved){
  <p><label><input type="checkbox" data-compare ${settings.compare?'checked':''}> Compare with another item</label></p>
  ${settings.compare?`<section><h3>Item B</h3><div class="soul-grid" role="group" aria-label="Item B lines"><span class="soul-lbl">Slot</span><select data-bslot aria-label="Item B slot">${slots.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>${settings.lines.map((n,i)=>{const on=settings.locks.includes(i);return `<span class="soul-lbl">${esc(SOUL_LINES[i])}</span><select data-bline="${i}" aria-label="Item B ${esc(SOUL_LINES[i])}">${opts}</select><button type="button" class="lock-btn${on?' is-locked':''}" data-lock-toggle="${i}" aria-pressed="${on?'true':'false'}" aria-label="${on?'Unlock':'Lock'} ${SOUL_LINES[i]}" title="${on?'Locked: this line is left alone':'Unlocked: this line can be rerolled'}" ${n?'':'disabled'}>${LOCK_ICON[on?'closed':'open']}</button>`;}).join('')}</div>
  <details ${box.querySelector('[data-bdetails]')?.open||!settings.targets.length?'open':''} data-bdetails><summary>Wanted stats for Item B (${settings.targets.length} selected)</summary><button type="button" data-clear-wanted="targets"${settings.targets.length?'':' disabled'}>Clear all</button><div data-wanted="targets">${soulWantedOptions(other,settings.slot,settings.lines,settings.targets)}</div></details>
- <p class="muted">${soulRateNote(settings.slot,sl.className)}</p><h3>Next-roll comparison</h3><p>Item A (${esc(sl.slot)} · ${soulClassName(sl.className)}): ${summary(a)}</p><p>Item B (${esc(settings.slot)} · ${soulClassName(sl.className)}): ${summary(b)}</p><p>${diff}</p></section>`:''}`;
+ <p class="muted">${soulRateNote(settings.slot,sl.className)}</p><h3>Next-roll comparison</h3><p>Item A (${esc(sl.slot)} · ${soulClassName(sl.className)}): ${summary(a)}</p><p>Item B (${esc(settings.slot)} · ${soulClassName(sl.className)}): ${summary(b)}</p><p>${diff}</p>${soulCostCompare(a,b,pool,sl,aTargets,saved,other,settings)}</section>`:''}`;
  box.onclick=e=>{const k=e.target.closest('[data-clear-wanted]')?.dataset.clearWanted;if(k!=='wanted'&&k!=='targets')return;settings[k]=[];save();renderSoul();box.querySelector(`[data-wanted="${k}"]`)?.closest('details')?.querySelector('summary')?.focus();};
  box.onchange=e=>{const x=e.target, group=x.closest('[data-wanted]');
  if(group)settings[group.dataset.wanted]=Array.from(group.querySelectorAll('input:checked'),c=>c.value);
@@ -359,14 +446,14 @@ if(!eligible.includes(+sl.reroll))sl.reroll=eligible[0]??-1;$('sline').value=Str
 $('sline').classList.remove('soul-good','soul-worse');$('sadvice').classList.remove('soul-good','soul-worse');$('sadvice').textContent='';
 const out=$('sresult'),warn=m=>{out.innerHTML=`<p class="warn">${m}</p>`;$('sadvice').textContent='';};
 
-if(!$('soul-upgrades')){const panel=document.createElement('div');panel.id='soul-upgrades';out.before(panel);}
+soulCostPanel();if(!$('soul-upgrades')){const panel=document.createElement('div');panel.id='soul-upgrades';($('soul-cost')||out).before(panel);}
 const multi=renderSoulComparison(pools,sl,saved);
 $('starget').disabled=multi.settings.wanted.length>0;
 if(multi.settings.wanted.length){
  $('srange').textContent='';const {a,summary}=multi;
  if(a.message)return warn(a.message);
  for(const id of ['sline'])$(id).classList.add(a.candidates.includes(+sl.reroll)?'soul-good':'soul-worse');
- out.innerHTML=`<p class="big">${summary(a)}</p><p>Recommended: reroll <strong>${a.best.map(i=>SOUL_LINES[i]).join(' or ')}</strong>. Can roll: ${esc(a.hits.map(([n])=>soulLabel(sl.slot,n)).join(', '))}</p>${soulAdviceMulti(a,sl,saved)}`;
+ out.innerHTML=`<p class="big">${summary(a)}</p><p>Recommended: reroll <strong>${a.best.map(i=>SOUL_LINES[i]).join(' or ')}</strong>. Can roll: ${esc(a.hits.map(([n])=>soulLabel(sl.slot,n)).join(', '))}</p>${soulAdviceMulti(a,sl,saved)}${soulCostBlock(pool,sl.lines,saved,multi.settings.wanted)}`;
  return;
 }
 if(ti<0)return warn('Select the stat you want.');if(!filled.length)return warn('Enter at least one line.');
@@ -386,10 +473,14 @@ const bestN=wt/(W-others.slice(0,n).reduce((s,i)=>s+w[i],0));
 out.innerHTML=`<p class="big">${pct(p)} per reroll</p><p class="sub">Expected ${fmt(Math.round(1/p*10)/10)} rerolls (Sync Stones or fodder items) if the odds never changed · 50% within ${need(0.5)}, 90% within ${need(0.9)}, 99% within ${need(0.99)} rerolls</p>
 <p class="muted">Recommended: reroll <strong>${SOUL_LINES[filled[lowPos]]}</strong> (${esc(soulLabel(sl.slot,nm[stats[lowPos]]))}, ${pct(w[stats[lowPos]]/100)}). ${esc(soulLabel(sl.slot,sl.target))}: ${fmt(wt)} of the ${fmt(W)} pool, minus ${fmt(Math.round(excl*1000)/1000)} already on your lines. Best possible with ${n} line${n>1?'s':''}: ${pct(bestN)} per reroll.</p>
 <div class="soul-advice${state.ui.soulAdviceOpen?' open':''}"><button type="button" id="sadvicetoggle" aria-expanded="${state.ui.soulAdviceOpen?'true':'false'}"><span>Line advice — reroll ${SOUL_LINES[filled[lowPos]]}</span><span class="soul-advice-hint">${state.ui.soulAdviceOpen?'Hide other lines':'Show all lines'}</span></button><div class="scroll"><table><tr><th>Line</th><th>Stat on it</th><th>Chance of that stat</th><th>Advice</th></tr>${lineRows}</table></div><p class="muted soul-advice-note">The next roll has the same odds on every unlocked line. Rerolling a low-chance stat keeps higher-chance stats available for later rerolls.</p></div>
-<h3>Realistic number of rerolls (simulated)</h3><div class="scroll"><table><tr><th>Strategy</th><th>Average</th><th>Median</th><th>90% done by</th><th>99% done by</th></tr>${sims.join('')}</table></div><p class="muted">12,000 simulated runs. The odds change after each failed reroll because the stat on the rerolled line changes, which is why this differs a little from the simple estimate above.</p>
+${soulCostBlock(pool,sl.lines,saved,[sl.target])}<h3>Realistic number of rerolls (simulated)</h3><div class="scroll"><table><tr><th>Strategy</th><th>Average</th><th>Median</th><th>90% done by</th><th>99% done by</th></tr>${sims.join('')}</table></div><p class="muted">12,000 simulated runs. The odds change after each failed reroll because the stat on the rerolled line changes, which is why this differs a little from the simple estimate above.</p>
 <h3>Best case by number of lines</h3><div class="scroll"><table><tr><th>Lines filled</th><th>Best stats to keep on them</th><th>Chance per reroll</th><th>Expected rerolls</th></tr>${bestRows.join('')}</table></div><p class="muted">Best case assumes your lines hold the highest-chance stats other than the one you want. More filled lines means more stats excluded, which improves your odds.</p>`;}
 $('sresult').addEventListener('click',e=>{if(!e.target.closest('#sadvicetoggle'))return;state.ui.soulAdviceOpen=!state.ui.soulAdviceOpen;save();renderSoul();$('sadvicetoggle')?.focus();});
 $('pSoul').addEventListener('click',e=>{const b=e.target.closest('[data-lock-toggle]');if(!b||b.disabled)return;const i=+b.dataset.lockToggle,st=state.soulUpgrades;if(!st||!st.lines[i])return;st.locks=st.locks.includes(i)?st.locks.filter(j=>j!==i):[...st.locks,i];save();renderSoul();document.querySelector('[data-lock-toggle="'+i+'"]')?.focus();});
+$('scstones').oninput=()=>{state.ui.syncStones=$('scstones').value;save();renderSoul();};
+$('scfodder').oninput=()=>{state.ui.fodderPrice=$('scfodder').value;save();renderSoul();};
+$('scitem').onchange=()=>{state.ui.fodderSrc=$('scitem').value;save();renderSoul();};
+$('scfetch').onclick=async()=>{const b=$('scfetch');b.disabled=true;await refreshPrices(typeof matRows==='function'?matRows().map(r=>r[0]):[],m=>$('scstatus').textContent=m);b.disabled=false;if(state.refresh[server]?.ok)$('scstatus').textContent='Prices updated.';renderSoul();};
 function setSoul(k,v){state.soul[k]=v;save();renderSoul();}
 $('sslot').onchange=()=>{state.soul.slot=$('sslot').value;if(state.soulUpgrades)state.soulUpgrades.wanted=[];state.soul.target='';state.soul.lines=['','','','','',''];save();renderSoul();};
 $('starget').onchange=()=>setSoul('target',$('starget').value);$('sline').onchange=()=>setSoul('reroll',+$('sline').value);
@@ -421,7 +512,7 @@ else{const c=r.counts||{};h=r.ok?`<span class="ok">✔ Last refresh succeeded</s
 $('refresh').innerHTML=h;$('krefresh').innerHTML=h;if($('mrefresh'))$('mrefresh').innerHTML=h;}
 function required(scope,f){return [...new Set([E,...(scope==='all'?Object.keys(pack.families):[f]).flatMap(s=>names(s))])];}
 async function fetchSnapshot(sid,request,progress){let offset=0,total=1,all=[];const seen=new Set();while(offset<total){progress(offset);const u=new URL('/api/items',location.href);u.search=new URLSearchParams({sort:'name',order:'asc',window:'24h',limit:'1000',offset:String(offset),server:sid});const o=await request(u);if(!Array.isArray(o.items)||!Number.isFinite(+o.total))throw Error('Invalid API response');total=+o.total;if(!o.items.length&&offset<total)throw Error('Incomplete pagination');const sig=o.items.map(i=>i.item_key).join(',');if(seen.has(sig))throw Error('Repeated page');seen.add(sig);all.push(...o.items);offset+=o.items.length;}return all;}
-function applySnapshot(items,wanted,sid){const byKey=new Map(items.map(i=>[+i.item_key,i])),byName=new Map(items.map(i=>[i.name,i])),target=state.caches[sid]||(state.caches[sid]={});let updated=0,unlisted=0,newest='';const missing=[];for(const name of wanted){const key=catalog.get(name)?.item_key,i=byKey.get(+key)||byName.get(name);if(!i){target[name]={price:null,label:'Not found in snapshot'};missing.push(name);}else{target[name]=normalize(i);target[name].price==null?unlisted++:updated++;if(i.captured_at&&String(i.captured_at)>newest)newest=String(i.captured_at);}}for(const i of items)catalog.set(i.name,{name:i.name,item_key:i.item_key});return{updated,unlisted,missing,newest};}
+function applySnapshot(items,wanted,sid){const byKey=new Map(items.map(i=>[+i.item_key,i])),byName=new Map(items.map(i=>[i.name,i])),target=state.caches[sid]||(state.caches[sid]={});let updated=0,unlisted=0,newest='';const missing=[];for(const name of wanted){const key=catalog.get(name)?.item_key,i=byKey.get(+key)||byName.get(name);if(!i){target[name]={price:null,label:'Not found in snapshot'};missing.push(name);}else{{const old=target[name];target[name]=normalize(i);if(old&&!/manual/i.test(String(old.label||''))){const np=target[name].price,op=old.price;if(valid(np)&&valid(op)&&+np!==+op){target[name].prev=+op;}else if(valid(old.prev))target[name].prev=+old.prev;}target[name].price==null?unlisted++:updated++;}if(i.captured_at&&String(i.captured_at)>newest)newest=String(i.captured_at);}}for(const i of items)catalog.set(i.name,{name:i.name,item_key:i.item_key});try{(state.fodder??={})[sid]=fodderStats(items);}catch(e){}return{updated,unlisted,missing,newest};}
 $('quit').onclick=async()=>{if(!confirm('Stop the calculator program? Your saved data is kept.'))return;try{await fetch('/api/quit',{method:'POST'});document.body.innerHTML='<p style="padding:30px">The calculator has stopped. You can close this tab.</p>';}catch(e){$('status').textContent='Could not stop: '+e.message;}};
 async function refreshPrices(wanted,say){const sid=server,prev=state.refresh[sid]||{},btns=[$('fetch'),$('kfetch'),$('mfetch')];btns.forEach(b=>b.disabled=true);$('server').disabled=true;state.refresh[sid]={...prev,pending:true};renderRefresh();try{const items=await fetchSnapshot(sid,async u=>{const r=await fetch(u,{signal:AbortSignal.timeout(20000)});if(!r.ok){let message='HTTP '+r.status;try{message+=': '+(await r.json()).error;}catch{}throw Error(message);}return r.json();},offset=>say('Downloading: '+offset+' records…'));const r=applySnapshot(items,wanted,sid),now=new Date().toISOString();state.refresh[sid]={ok:true,lastAttempt:now,lastSuccess:now,apiCaptured:r.newest,counts:{updated:r.updated,unlisted:r.unlisted,missing:r.missing.length,names:r.missing}};save();render();if(!$('pOwned').hidden)renderOwned();if(!$('pMat').hidden)renderMat();if(!$('pCook').hidden)renderCook();say(`Updated ${r.updated}; unlisted ${r.unlisted}; missing ${r.missing.length}.`);}catch(e){state.refresh[sid]={...prev,pending:false,ok:false,lastAttempt:new Date().toISOString(),message:e.message};save();renderRefresh();say('Refresh failed; existing prices retained. '+e.message);}finally{btns.forEach(b=>b.disabled=false);$('server').disabled=false;}}
 $('fetch').onclick=()=>refreshPrices(required($('scope').value,$('family').value),m=>$('status').textContent=m);
