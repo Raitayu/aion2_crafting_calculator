@@ -87,6 +87,8 @@
 #pSoul .soul-cost-grid label{margin:0;color:#aab6c9}
 #pSoul .soul-cost-grid input,#pSoul .soul-cost-grid select{width:100%;margin:0;box-sizing:border-box}
 #pSoul #scinfo{margin:.3rem 0 .6rem}
+/*soul-odds-v1*/
+#pSoul .wanted-odds{color:#aab6c9;font-size:.85em;margin-left:.1rem}
 </style><h1>AION2 EU Craft Planner · v<span id="ver"></span></h1>
 <div id="update" role="status" hidden></div>
 <section><label>EU server <select id="server"></select></label><span id="serverlabel"></span> <button id="quit" title="Stop the local program">Exit app</button> <button id="ucheck">Check for updates</button> <span id="ustatus" class="muted"></span><div class="main-tabs" role="group" aria-label="Calculator sections"><button id="tabP" class="tab on">Crafting Prices</button><button id="tabC" class="tab">Splendent Prices</button><span class="tab-divider" aria-hidden="true"></span><button id="tabM" class="tab">Material Prices</button><button id="tabO" class="tab">Owned Materials</button><span class="tab-divider" aria-hidden="true"></span><button id="tabK" class="tab">Cooking</button><span class="tab-divider" aria-hidden="true"></span><button id="tabS" class="tab">Soulbind Odds</button><button id="tabL" class="tab">Soulbind Pools</button></div></section>
@@ -274,7 +276,7 @@ function soulRateNote(slot,c){if(Object.hasOwn(state.soulPools,slot))return 'Cus
  return SOUL_HIGH[c]?'Active weights entered from your report; applicability across Weapon, Guard and Rings is inferred.':'Provisional pool: abilities share the 20% base weight equally until the four 1.668% abilities are confirmed.';}
 
 function soulGroup(slot,stat,range){const k=soulKey(slot),alias={guard:'weapon',helmet:'helm',pauldrons:'shoulders',shoulder:'shoulders',top:'chest',breastplate:'chest',pants:'legs',greaves:'legs',cloaks:'cloak',shoes:'boots',earrings:'earring',ring:'rings'};if(soulIsSkill(range))return soulSkillKind(slot);const statKey=soulKey(stat).replace(/^multihit$/,'multihitchance');return (soulBis[alias[k]||k]||'').split('|').some(n=>soulKey(n)===statKey)?'BIS Lines':'Bad Lines';}
-function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Abilities','Passives'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>soulLabel(slot,a[0]).localeCompare(soulLabel(slot,b[0]),undefined,{numeric:true}));return rows.length?`<optgroup label="${g}">${rows.map(([n, ,value,label])=>`<option value="${esc(value)}">${esc(label===n?soulLabel(slot,n):label.endsWith(n)?label.slice(0,label.length-n.length)+soulLabel(slot,n):label)}</option>`).join('')}</optgroup>`:'';}).join('');}
+function soulOptions(entries,slot){return ['BIS Lines','Bad Lines','Abilities','Passives'].map(g=>{const rows=entries.filter(([n,r])=>soulGroup(slot,n,r)===g).sort((a,b)=>soulLabel(slot,a[0]).localeCompare(soulLabel(slot,b[0]),undefined,{numeric:true}));return rows.length?`<optgroup label="${g}">${rows.map(([n, ,value,label,w])=>`<option value="${esc(value)}">${esc((label===n?soulLabel(slot,n):label.endsWith(n)?label.slice(0,label.length-n.length)+soulLabel(slot,n):label)+(w!=null&&isFinite(+w)?' — '+pct(+w/100):''))}</option>`).join('')}</optgroup>`:'';}).join('');}
 
 function soulLabel(slot,n){return n;}
 function soulOutcome(pool,lines,locked,targets){
@@ -293,7 +295,7 @@ function soulOutcome(pool,lines,locked,targets){
 function soulWantedOptions(pool,slot,lines,chosen){
  return ['BIS Lines','Bad Lines','Abilities','Passives'].map(g=>{
  const rows=pool.filter(([n,,r])=>soulGroup(slot,n,r)===g).sort(([a],[b])=>soulLabel(slot,a).localeCompare(soulLabel(slot,b),undefined,{numeric:true}));
- return rows.length?`<fieldset><legend>${g}</legend>${rows.map(([n])=>`<label class="wanted-chip-v2"><input type="checkbox" value="${esc(n)}" ${chosen.includes(n)?'checked':''}> ${esc(soulLabel(slot,n))}${lines.includes(n)?'<small class="wanted-owned">On item</small>':''}</label>`).join('')}</fieldset>`:'';
+ return rows.length?`<fieldset><legend>${g}</legend>${rows.map(([n,w])=>`<label class="wanted-chip-v2"><input type="checkbox" value="${esc(n)}" ${chosen.includes(n)?'checked':''}> ${esc(soulLabel(slot,n))}${isFinite(+w)?` <small class="wanted-odds">${pct(+w/100)}</small>`:''}${lines.includes(n)?'<small class="wanted-owned">On item</small>':''}</label>`).join('')}</fieldset>`:'';
  }).join('');
 }
 const LOCK_ICON={closed:'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',open:'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>'};
@@ -383,7 +385,7 @@ function renderSoulComparison(pools,sl,saved){
  const b=soulOutcome(other,settings.lines,settings.locks,settings.targets);
  const summary=r=>r.message||`${pct(r.p)} per reroll · Reroll ${r.best.map(i=>esc(SOUL_LINES[i])).join(' or ')}${r.best.length>1?' (tied)':''}`;
  let diff='';if(a.p!=null&&b.p!=null){const d=(a.p-b.p)*100;diff=Math.abs(d)<1e-9?'Same next-roll odds.':`${d>0?'Item A':'Item B'} leads by ${Math.abs(d).toLocaleString('en-US',{maximumFractionDigits:6})} percentage points.`;}
- const opts='<option value="">(empty)</option>'+soulOptions(other.map(([n,,r])=>[n,r,n,n]),settings.slot);
+ const opts='<option value="">(empty)</option>'+soulOptions(other.map(([n,w,r])=>[n,r,n,n,w]),settings.slot);
  box.innerHTML=`<details ${box.querySelector('details')?.open||settings.wanted.length?'open':''}><summary>Wanted stats for Item A (${settings.wanted.length} selected)</summary><p>Select any acceptable stats. Clear the checklist to use the single-target dropdown.</p><button type="button" data-clear-wanted="wanted"${settings.wanted.length?'':' disabled'}>Clear all</button><div data-wanted="wanted">${soulWantedOptions(pool,sl.slot,sl.lines,settings.wanted)}</div></details>
  <p><label><input type="checkbox" data-compare ${settings.compare?'checked':''}> Compare with another item</label></p>
  ${settings.compare?`<section><h3>Item B</h3><div class="soul-grid" role="group" aria-label="Item B lines"><span class="soul-lbl">Slot</span><select data-bslot aria-label="Item B slot">${slots.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>${settings.lines.map((n,i)=>{const on=settings.locks.includes(i);return `<span class="soul-lbl">${esc(SOUL_LINES[i])}</span><select data-bline="${i}" aria-label="Item B ${esc(SOUL_LINES[i])}">${opts}</select><button type="button" class="lock-btn${on?' is-locked':''}" data-lock-toggle="${i}" aria-pressed="${on?'true':'false'}" aria-label="${on?'Unlock':'Lock'} ${SOUL_LINES[i]}" title="${on?'Locked: this line is left alone':'Unlocked: this line can be rerolled'}" ${n?'':'disabled'}>${LOCK_ICON[on?'closed':'open']}</button>`;}).join('')}</div>
@@ -430,8 +432,8 @@ classInput.onchange=()=>{
 };
 const pool=soulPoolFor(pools[sl.slot],sl.slot,sl.className),nm=pool.map(p=>p[0]),w=pool.map(p=>+p[1]),W=w.reduce((a,b)=>a+b,0),idx=n=>nm.indexOf(n);
 if(idx(sl.target)<0)sl.target='';sl.lines=sl.lines.map(n=>idx(n)<0?'':n);
-const opts='<option value="">(empty)</option>'+soulOptions(pool.map(([n,w,r])=>[n,r,n,n]),sl.slot);
-$('starget').innerHTML='<option value="">Select a stat…</option>'+soulOptions(pool.map(([n,,r])=>[n,r,n,n]),sl.slot);$('starget').value=sl.target;
+const opts='<option value="">(empty)</option>'+soulOptions(pool.map(([n,w,r])=>[n,r,n,n,w]),sl.slot);
+$('starget').innerHTML='<option value="">Select a stat…</option>'+soulOptions(pool.map(([n,w,r])=>[n,r,n,n,w]),sl.slot);$('starget').value=sl.target;
 for(let i=0;i<6;i++){$('sl'+i).innerHTML=opts;$('sl'+i).value=sl.lines[i];}
 const ti=idx(sl.target);$('srange').textContent=ti>=0?`${pct(w[ti]/100)} to roll${pool[ti][2]?' · value '+pool[ti][2]:''}`:'';
 const filled=[];sl.lines.forEach((n,i)=>{if(n)filled.push(i);});
