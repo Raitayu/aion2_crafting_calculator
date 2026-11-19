@@ -427,8 +427,8 @@ function charOpenInSoulbind(slotPos){const c=state.char,it=c?.items?.[slotPos],e
  save();showTab('S');renderSoul();const miss=all.filter(n=>!names.has(n));
  if(miss.length)setTimeout(()=>{$('sadvice').textContent='Not in this pool and skipped: '+miss.join(', ');},0);}
 function charLines(it){const st=(it.subStats||[]).map(s=>({name:s.name,value:s.value})),sk=(it.subSkills||[]).map(k=>typeof k==='string'?{name:k,value:'+1'}:{name:k.name,value:'+'+String(k.level??k.value??1).replace(/^\+/,'')}).filter(k=>k.name);return [...st,...sk];}
-const DMG_DEFAULT={atk:2829,wdb:25.7,db:27.4,pveDb:31.7,bossDb:3.5,cdb:15.4,crit:1139,frontCrit:10,backCrit:115,critAtk:21,pveAtk:143,bossAtk:174,frontAtk:108,backAtk:13,frontDb:9.2,backDb:0,double:11.4,multi:14.6,perfect:23.6,critResist:1200,tol:0,critTol:0,doubleRes:0,side:'front',cs:56.4,csEff:100};
-const DMG_FIELDS=[['atk','Attack',''],['wdb','Weapon Damage Boost','%'],['ai','Attack increase','%'],['db','Damage Boost','%'],['pveDb','PvE Damage Boost','%'],['bossDb','Boss Damage Boost','%'],['cdb','Critical Damage Boost','%'],['crit','Critical Hit',''],['frontCrit','Front Attack Critical Hit',''],['backCrit','Back Attack Critical Hit',''],['critAtk','Critical Attack',''],['pveAtk','PvE Attack',''],['bossAtk','Boss Attack',''],['frontAtk','Front Attack',''],['backAtk','Back Attack',''],['frontDb','Front Attack Damage Boost','%'],['backDb','Back Attack Damage Boost','%'],['double','Double Chance','%'],['multi','Multi-hit Chance','%'],['perfect','Perfect Chance','%'],['cs','Combat Speed','%'],['csEff','Combat Speed counts for (share of damage that speeds up)','%']];
+const DMG_DEFAULT={atk:2829,wdb:25.7,db:27.4,pveDb:31.7,bossDb:3.5,cdb:15.4,crit:1139,frontCrit:10,backCrit:115,critAtk:21,pveAtk:143,bossAtk:174,frontAtk:108,backAtk:13,frontDb:9.2,backDb:0,double:11.4,multi:14.6,perfect:23.6,critResist:1200,tol:0,critTol:0,doubleRes:0,side:'front',K:10,cs:56.4,csEff:100};
+const DMG_FIELDS=[['atk','Attack',''],['wdb','Weapon Damage Boost','%'],['ai','Attack increase','%'],['db','Damage Boost','%'],['pveDb','PvE Damage Boost','%'],['bossDb','Boss Damage Boost','%'],['cdb','Critical Damage Boost','%'],['crit','Critical Hit',''],['frontCrit','Front Attack Critical Hit',''],['backCrit','Back Attack Critical Hit',''],['critAtk','Critical Attack',''],['pveAtk','PvE Attack',''],['bossAtk','Boss Attack',''],['frontAtk','Front Attack',''],['backAtk','Back Attack',''],['frontDb','Front Attack Damage Boost','%'],['backDb','Back Attack Damage Boost','%'],['double','Double Chance','%'],['multi','Multi-hit Chance','%'],['perfect','Perfect Chance','%'],['K','Rerolls to plan for',''],['cs','Combat Speed','%'],['csEff','Combat Speed counts for (share of damage that speeds up)','%']];
 const DMG_TARGET=[['critResist','Boss Critical Hit Resist',''],['tol','Boss Damage Tolerance','%'],['critTol','Boss Critical Damage Tolerance','%'],['doubleRes','Boss Double Resist','%']];
 const DMG_STEPS=[['Attack',100],['Attack increase',1],['Weapon Damage Boost',1],['Damage Boost',1],['Critical Damage Boost',1],['Critical Hit',100],['Critical Attack',10],['Front Attack',10],['Double Chance',1],['Multi-hit Chance',1],['Perfect Chance',1],['Combat Speed',1]];
 function dmgAutoAI(){const c=state.char;if(!c)return 0;let t=0;
@@ -450,6 +450,23 @@ function dmgModel(s){const back=s.side==='back',
 function dmgApply(s,name,v){const t={...s};switch(name){case 'Attack':t.atk+=v;break;case 'Attack increase':t.ai+=v;break;case 'Might':t.ai+=0.1*v;break;case 'Weapon Damage Boost':t.wdb+=v;break;case 'Damage Boost':t.db+=v;break;case 'Critical Damage Boost':t.cdb+=v;break;case 'Critical Hit':t.crit+=v;break;case 'Critical Attack':t.critAtk+=v;break;case 'Front Attack':t.frontAtk+=v;break;case 'Back Attack':t.backAtk+=v;break;case 'Double Chance':t.double+=v;break;case 'Perfect Chance':t.perfect+=v;break;case 'Multi-hit Chance':t.multi+=v;break;case 'Combat Speed':t.cs+=v;break;}return t;}
 function dmgNum(str){const m=String(str??'').match(/-?\d[\d,]*\.?\d*/);return m?parseFloat(m[0].replace(/,/g,'')):NaN;}
 function dmgMid(range){const m=String(range||'').match(/(-?\d[\d,]*\.?\d*)\s*%?\s*[–-]\s*(-?\d[\d,]*\.?\d*)/);return m?(parseFloat(m[1].replace(/,/g,''))+parseFloat(m[2].replace(/,/g,'')))/2:NaN;}
+const DMG_ROLL_CACHE=new Map();
+function dmgRng(seed){let a=seed|0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function dmgRollout(pool,lines,first,K,runs,s0){
+ const d0=dmgModel(s0),W=new Map(pool.map(p=>[p[0],+p[1]])),mids=new Map(pool.map(p=>[p[0],dmgMid(p[2])]));
+ let sumG=0,up=0;
+ for(let r=0;r<runs;r++){const rnd=dmgRng(7919*(r+1));
+  let cur=lines.map(l=>({name:l.name,v:l.skill?NaN:dmgNum(l.value)})),s=s0;
+  for(let k=0;k<K;k++){
+   let idx;
+   if(k===0)idx=first;else{let best=1e9,bw=1e9;idx=0;const dn=dmgModel(s);
+    cur.forEach((l,i)=>{const without=Number.isFinite(l.v)?dmgApply(s,l.name,-l.v):s,worth=dn/dmgModel(without)-1,w=W.get(l.name)??0;if(worth<best-1e-9||(Math.abs(worth-best)<=1e-9&&w<bw)){best=worth;bw=w;idx=i;}});}
+   const names=new Set(cur.map(l=>l.name)),av=pool.filter(p=>!names.has(p[0])),tot=av.reduce((a,p)=>a+ +p[1],0);if(!tot)break;
+   let x=rnd()*tot,pick=av[av.length-1];for(const p of av){x-=+p[1];if(x<0){pick=p;break;}}
+   const old=cur[idx];if(Number.isFinite(old.v))s=dmgApply(s,old.name,-old.v);
+   const m=dmgMid(pick[2]);cur[idx]={name:pick[0],v:Number.isFinite(m)?m:NaN};if(Number.isFinite(m))s=dmgApply(s,pick[0],m);}
+  const g=dmgModel(s)/d0-1;sumG+=g;if(g>1e-9)up++;}
+ return{mean:sumG/runs,pUp:up/runs};}
 function dmgRank(){const c=state.char;if(!c)return [];const s0=dmgSheet(),d0=dmgModel(s0),pools=soulPools(),cls=c.profile?.className,classes=['Gladiator',...Object.keys(SOUL_CLASSES)],out=[];
  for(const [sn,slot,label] of CHAR_SLOTS){if(!slot||!pools[slot])continue;const eq=c.equipment.find(e=>e.slotPosName===sn),it=eq&&c.items[eq.slotPos];if(!it||it.error)continue;
   const lines=charLines(it);if(!lines.length)continue;
@@ -458,15 +475,18 @@ function dmgRank(){const c=state.char;if(!c)return [];const s0=dmgSheet(),d0=dmg
    const base=isSkill||!Number.isFinite(v)?s0:dmgApply(s0,l.name,-v),own=dmgModel(base)/d0-1;
    let ex=0,pUp=0,best=null;
    for(const p of cand){const mid=dmgMid(p[2]),nv=Number.isFinite(mid)?dmgModel(dmgApply(base,p[0],mid))/d0-1:own;const pr=+p[1]/W,delta=nv-0;ex+=pr*delta;if(nv>1e-9)pUp+=pr;if(!best||nv>best.gain)best={name:p[0],gain:nv,mid};}
-   return{name:l.name,value:l.value,loss:own,ex,pUp,best};});
-  const top=rows.reduce((a,b)=>b.ex>a.ex?b:a,rows[0]);out.push({label,slot,item:eq.name,rows,top});}
- return out.sort((a,b)=>b.top.ex-a.top.ex);}
+   return{name:l.name,value:l.value,skill:isSkill,w:+(pool.find(p=>p[0]===l.name)?.[1]??0),loss:own,ex,pUp,best};});
+  const K=Math.max(1,Math.min(50,Math.round(s0.K||10))),key=JSON.stringify([slot,K,rows.map(r=>[r.name,r.value]),Object.entries(s0)]);
+  let roll=DMG_ROLL_CACHE.get(key);if(!roll){const ls=rows.map(r=>({name:r.name,value:r.value,skill:r.skill}));roll=rows.map((r,i)=>dmgRollout(pool,ls,i,K,500,s0));if(DMG_ROLL_CACHE.size>40)DMG_ROLL_CACHE.clear();DMG_ROLL_CACHE.set(key,roll);}
+  rows.forEach((r,i)=>{r.roll=roll[i].mean;r.rollUp=roll[i].pUp;});
+  const mx=Math.max(...rows.map(r=>r.roll)),top=rows.filter(r=>r.roll>=mx-0.0003).reduce((a,b)=>b.w<a.w?b:a);out.push({label,slot,item:eq.name,rows,top,K});}
+ return out.sort((a,b)=>b.top.roll-a.top.roll);}
 function dmgHtml(){const c=state.char;if(!c)return '';const s=dmgSheet(),u=state.ui.dmg||{},d0=dmgModel(s),back=s.side==='back';
  const inp=(k,l,unit)=>`<label class="dmg-f"><span>${esc(l)}${unit?' ('+unit+')':''}</span><input type="number" step="any" data-dmg="${k}" value="${esc(String(Math.round(s[k]*100)/100))}"></label>`;
  const stepRows=DMG_STEPS.map(([n,st])=>{const g=dmgModel(dmgApply(s,n,st))/d0-1;return `<tr><td>${esc(n)}</td><td>+${fmt(st)}${/Attack$|^Critical Hit$/.test(n)&&!/increase/.test(n)?'':'%'}</td><td>${(g*100).toLocaleString('en-US',{maximumFractionDigits:2})}%</td></tr>`;}).join('');
  const rank=dmgRank(),P=typeof soulCostInfo==='function'?soulCostInfo().P:null;
  const f2=x=>(x*100).toLocaleString('en-US',{maximumFractionDigits:2})+'%';
- const rankRows=rank.map((r,i)=>{const t=r.top,kina=P!=null&&t.ex>0?fmt(Math.round(P/(t.ex*100))):'–';return `<tr${i===0?' class="best"':''}><td>${esc(r.label)}<br><small class="muted">${esc(r.item)}</small></td><td>${esc(t.name)} <b>${esc(t.value)}</b><br><small class="muted">worth ${f2(Math.abs(t.loss)<1e-9?0:-t.loss)} now</small></td><td>${(t.ex>=0?'+':'')+f2(t.ex)}</td><td>${f2(t.pUp)}</td><td>${t.best?esc(t.best.name)+' '+(t.best.gain>=0?'+':'')+f2(t.best.gain):'–'}</td><td>${kina}</td></tr>`;}).join('');
+ const rankRows=rank.map((r,i)=>{const t=r.top,kina=P!=null&&t.roll>0?fmt(Math.round(r.K*P/(t.roll*100))):'–';return `<tr${i===0?' class="best"':''}><td>${esc(r.label)}<br><small class="muted">${esc(r.item)}</small></td><td>${esc(t.name)} <b>${esc(t.value)}</b><br><small class="muted">worth ${f2(Math.abs(t.loss)<1e-9?0:-t.loss)} now</small></td><td>${(t.roll>=0?'+':'')+f2(t.roll)}</td><td>${f2(t.rollUp)}</td><td>${t.best?esc(t.best.name)+' '+(t.best.gain>=0?'+':'')+f2(t.best.gain):'–'}</td><td>${kina}</td></tr>`;}).join('');
  return `<details class="dmg-box"${u.open===false?'':' open'} id="dmgbox"><summary>Damage model and next soulbind upgrade</summary>
  <p class="muted">A comparison tool, not an exact damage predictor. It follows the community damage formula for PvE bosses with a skill multiplier of 1 and no flat skill damage, and ignores Boss Defense, Power Shard and Attack Bonus. Edit any value to match your game. Skill lines are not modelled. Combat Speed is counted as more hits per second, scaled by the share you set below (100% means all your damage speeds up with it; cooldown-limited skills do not, so real rotations are usually lower).</p>
  <div class="dmg-grid">${DMG_FIELDS.map(([k,l,u2])=>inp(k,l,u2)).join('')}</div>
@@ -474,8 +494,8 @@ function dmgHtml(){const c=state.char;if(!c)return '';const s=dmgSheet(),u=state
  <p class="muted">Crit chance now: ${f2(Math.min(0.5,Math.max(0,(s.crit+(back?s.backCrit:s.frontCrit)-s.critResist)/1000)))} (10 points of chance per 100 Critical Hit above the boss's resist, capped at 50%). Boss Critical Hit Resist defaults to about 1,200, the community estimate for Ludra on Global.</p>
  <p><button type="button" id="dmgreset">Reset to defaults</button></p>
  <h4>What a bit more of each stat is worth</h4><div class="scroll"><table><tr><th>Stat</th><th>Added</th><th>Damage change</th></tr>${stepRows}</table></div>
- <h4>Best next reroll, by slot</h4><div class="scroll"><table><tr><th>Slot</th><th>Line to reroll</th><th>Expected change per reroll</th><th>Chance to improve</th><th>Best possible result</th><th>Kina per +1% (expected)</th></tr>${rankRows||'<tr><td colspan="6" class="muted">No equipped items with soulbind lines.</td></tr>'}</table></div>
- <p class="muted">For each slot the table picks the line whose reroll has the best average result. A reroll replaces the line with a random stat from the slot's pool that is not already on the item, using the pool odds and the middle of each stat's roll range. The cost column needs a fodder price in the Reroll cost box on the Soulbind Odds tab.</p></details>`;}
+ <h4>Best next reroll, by slot</h4><div class="scroll"><table><tr><th>Slot</th><th>Line to reroll</th><th>Expected change after ${s.K} rerolls</th><th>Chance of a net gain</th><th>Best possible result</th><th>Kina per +1% (expected)</th></tr>${rankRows||'<tr><td colspan="6" class="muted">No equipped items with soulbind lines.</td></tr>'}</table></div>
+ <p class="muted">Each line is tested by simulating your next rerolls (the number set above), starting with that line and then always rerolling the line worth least, with the lowest pool chance winning ties. A stat you remove goes back into the pool, and a high-chance stat left on the item makes later rolls easier, so this favours rerolling low-chance lines first. New stats come from the slot's pool, excluding every stat already on the item, using the middle of each roll range. Lines within 0.03 points of the best are treated as equal and the lowest-chance one is shown. The cost column needs a fodder price in the Reroll cost box on the Soulbind Odds tab.</p></details>`;}
 function dmgWire(box){const d=box.querySelector('#dmgbox');if(!d)return;
  d.ontoggle=()=>{state.ui.dmg??={};state.ui.dmg.open=d.open;save();};
  d.querySelectorAll('[data-dmg]').forEach(el=>el.onchange=()=>{state.ui.dmg??={};state.ui.dmg[el.dataset.dmg]=el.dataset.dmg==='side'?el.value:el.value;save();renderChar();});
