@@ -937,4 +937,43 @@ if(typeof renderChar==='function'&&state&&state.char)try{renderChar();}catch(e){
 })();
 
 </script>
+<script>
+/*speed-v7*/
+(function(){
+if(window.__speedV7)return;
+if(typeof dmgRollout!=='function'||typeof dmgSkillFactor!=='function'||typeof dmgRank!=='function'||typeof DMG_SKILL_LIST==='undefined'){console.error('Speed patch: damage model functions not found');return;}
+window.__speedV7=1;window.__dmgWarm=false;
+for(const sk of DMG_SKILL_LIST){sk._a=sk.k+'_lv';sk._b=sk.k+'_sh';sk._c=sk.k+'_l0';}
+let actC=null,actK=null;
+const act=()=>{const cls=state&&state.char&&state.char.profile&&state.char.profile.className;if(!actC||actK!==cls){actK=cls;const l=DMG_SKILL_LIST.filter(sk=>sk.cls===cls);actC=l.length?l:DMG_SKILL_LIST;}return actC;};
+window.dmgSkillFactor=function(s){let f=1;for(const sk of act()){const lv=s[sk._a];if(lv===s[sk._c])continue;const sh=Math.max(0,Math.min(100,s[sk._b]||0))/100;if(!sh)continue;f+=sh*(dmgSkillHit(sk,lv,s.atk)/dmgSkillHit(sk,s[sk._c],s.atk)-1);}return f;};
+const oS=window.dmgSheet;
+window.dmgSheet=function(){const s=oS.apply(this,arguments);const cls=state&&state.char&&state.char.profile&&state.char.profile.className;
+ if(cls&&DMG_SKILL_LIST.some(sk=>sk.cls===cls)){for(const sk of DMG_SKILL_LIST)if(sk.cls!==cls){delete s[sk._a];delete s[sk._b];delete s[sk._c];}}return s;};
+window.dmgRollout=function(pool,lines,first,K,runs,s0){
+ const d0=dmgModel(s0),W=new Map(pool.map(p=>[p[0],+p[1]]));
+ const maxOf=new Map(pool.map(p=>[p[0],dmgMax(p[2])])),isSk=new Map(pool.map(p=>[p[0],dmgIsSkill(p[0])]));
+ const init=lines.map(l=>({name:l.name,v:dmgLineVal(pool,l.name,l.value)}));
+ let sumG=0,up=0;
+ for(let r=0;r<runs;r++){const rnd=dmgRng(7919*(r+1));
+  const cur=init.map(l=>({name:l.name,v:l.v}));let s=s0;
+  for(let k=0;k<K;k++){
+   let idx;
+   if(k===0)idx=first;else{let best=1e9,bw=1e9;idx=0;const dn=dmgModel(s);
+    for(let i=0;i<cur.length;i++){const l=cur[i];if(dmgLocked(s,l.name))continue;const without=Number.isFinite(l.v)?dmgApply(s,l.name,-l.v):s,worth=dn/dmgModel(without)-1,w=W.get(l.name)??0;if(worth<best-1e-9||(Math.abs(worth-best)<=1e-9&&w<bw)){best=worth;bw=w;idx=i;}}if(best>=1e9)break;}
+   let tot=0;const av=[];for(const p of pool){let on=false;for(let i=0;i<cur.length;i++)if(cur[i].name===p[0]){on=true;break;}if(!on){av.push(p);tot+=+p[1];}}if(!tot)break;
+   let x=rnd()*tot,pick=av[av.length-1];for(const p of av){x-=+p[1];if(x<0){pick=p;break;}}
+   const old=cur[idx];if(Number.isFinite(old.v))s=dmgApply(s,old.name,-old.v);
+   const m=isSk.get(pick[0])?1:maxOf.get(pick[0]);cur[idx]={name:pick[0],v:Number.isFinite(m)?m:NaN};if(Number.isFinite(m))s=dmgApply(s,pick[0],m);}
+  const g=dmgModel(s)/d0-1;sumG+=g;if(g>1e-9)up++;}
+ return{mean:sumG/runs,pUp:up/runs};};
+const oRank=window.dmgRank;let pending=false;
+window.dmgRank=function(){if(window.__dmgWarm)return oRank.apply(this,arguments);
+ if(!pending){pending=true;setTimeout(()=>{try{oRank();}catch(e){console.error(e);}window.__dmgWarm=true;pending=false;try{renderChar();}catch(e){}},30);}
+ return [];};
+const oH=window.dmgHtml;
+window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equipped items with soulbind lines.','Calculating the best next reroll\u2026');return h;};
+})();
+
+</script>
 </html>
