@@ -521,7 +521,7 @@ function dmgRollout(pool,lines,first,K,runs,s0){
    let idx;
    if(k===0)idx=first;else{let best=1e9,bw=1e9;idx=0;const dn=dmgModel(s);
     cur.forEach((l,i)=>{if(dmgLocked(s,l.name))return;const without=Number.isFinite(l.v)?dmgApply(s,l.name,-l.v):s,worth=dn/dmgModel(without)-1,w=W.get(l.name)??0;if(worth<best-1e-9||(Math.abs(worth-best)<=1e-9&&w<bw)){best=worth;bw=w;idx=i;}});if(best>=1e9)break;}
-   const names=new Set(cur.map(l=>l.name)),av=pool.filter(p=>!names.has(p[0])),tot=av.reduce((a,p)=>a+ +p[1],0);if(!tot)break;
+   const names=new Set(cur.map(l=>l.name)),av=(window.__soulV9?window.__soulV9.availEff(pool,names):pool.filter(p=>!names.has(p[0]))),tot=av.reduce((a,p)=>a+ +p[1],0);if(!tot)break;
    let x=rnd()*tot,pick=av[av.length-1];for(const p of av){x-=+p[1];if(x<0){pick=p;break;}}
    const old=cur[idx];if(Number.isFinite(old.v))s=dmgApply(s,old.name,-old.v);
    const m=dmgIsSkill(pick[0])?1:dmgMax(pick[2]);cur[idx]={name:pick[0],v:Number.isFinite(m)?m:NaN};if(Number.isFinite(m))s=dmgApply(s,pick[0],m);}
@@ -556,7 +556,7 @@ document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset||t.data
 function dmgRank(){if(!window.__dmgWarm&&window.__dmgDefer)return window.__dmgDefer();const c=state.char;if(!c)return [];const s0=dmgSheet(),d0=dmgModel(s0),pools=soulPools(),cls=c.profile?.className,classes=['Gladiator',...Object.keys(SOUL_CLASSES)],out=[];
  for(const [sn,slot,label] of CHAR_SLOTS){if(!slot||!pools[slot])continue;const eq=c.equipment.find(e=>e.slotPosName===sn),it=eq&&c.items[eq.slotPos];if(!it||it.error)continue;
   const lines=dmgLines(it,eq);if(!lines.length)continue;
-  const pool=soulPoolFor(pools[slot],slot,classes.includes(cls)?cls:'Gladiator'),on=new Set(lines.map(l=>l.name)),cand=pool.filter(p=>!on.has(p[0])),W=cand.reduce((a,p)=>a+ +p[1],0);if(!W)continue;
+  const pool=soulPoolFor(pools[slot],slot,classes.includes(cls)?cls:'Gladiator'),on=new Set(lines.map(l=>l.name)),cand=(window.__soulV9?window.__soulV9.availEff(pool,on):pool.filter(p=>!on.has(p[0]))),W=cand.reduce((a,p)=>a+ +p[1],0);if(!W)continue;
   dmgCurSlot=slot+' '+label;const rows=lines.map(l=>{const isSkill=/^\+/.test(String(l.value))&&!(it.subStats||[]).some(x=>x.name===l.name),v=dmgLineVal(pool,l.name,l.value);
    const base=!Number.isFinite(v)?s0:dmgApply(s0,l.name,-v),own=dmgModel(base)/d0-1;
    let ex=0,pUp=0,best=null;
@@ -696,7 +696,7 @@ const stats=filled.map(i=>idx(sl.lines[i])),dup=stats.find((s,k)=>stats.indexOf(
 const have=filled.findIndex(i=>idx(sl.lines[i])===ti);if(have>=0)return out.innerHTML=`<p class="ok big">Already done: ${esc(soulLabel(sl.slot,sl.target))} is on ${SOUL_LINES[filled[have]]}.</p>`;
 if(!eligible.length)return warn('All filled lines are locked. Unlock a line to compare reroll strategies.');
 const allowed=eligible.map(i=>filled.indexOf(i));
-const wt=w[ti],excl=stats.reduce((s,i)=>s+w[i],0),p=wt/(W-excl),n=filled.length,pos=filled.indexOf(+sl.reroll);
+const wt=w[ti],excl=stats.reduce((s,i)=>s+w[i],0),p=(window.__soulV9?window.__soulV9.single(pool,stats,ti):wt/(W-excl)),n=filled.length,pos=filled.indexOf(+sl.reroll);
 const need=q=>Math.ceil(Math.log(1-q)/Math.log(1-p)),lowPos=allowed.reduce((b,k)=>w[stats[k]]<w[stats[b]]-1e-12?k:b,allowed[0]);
 const recommended=Math.abs(w[stats[pos]]-w[stats[lowPos]])<1e-12;
 for(const id of ['sline'])$(id).classList.add(recommended?'soul-good':'soul-worse');
@@ -976,6 +976,157 @@ window.dmgRollout=function(pool,lines,first,K,runs,s0){
  return{mean:sumG/runs,pUp:up/runs};};
 const oH=window.dmgHtml;
 window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equipped items with soulbind lines.','Calculating the best next reroll\u2026');return h;};
+})();
+
+</script>
+<script>
+
+/* soulbind-redistribution-v9
+   A line already on the item gives its chance evenly to the other options of the same kind:
+   stats -> other stats, skills/passives -> other skills/passives. */
+(function () {
+  if (window.soulRedistV9) return;
+  if (typeof soulRuns !== 'function' || typeof soulOutcome !== 'function' || typeof soulSim !== 'function') {
+    console.error('Soulbind v9 patch: expected soul functions not found, runtime part not applied');
+    return;
+  }
+  window.soulRedistV9 = 1;
+  const isSkillRange = r => /^\s*Lv\.?/i.test(String(r == null ? '' : r));
+  const catsOf = pool => pool.map(p => (isSkillRange(p[2]) ? 1 : 0));
+  function eff(w, cat, used, out) {
+    const uw = [0, 0], un = [0, 0], tn = [0, 0];
+    for (let i = 0; i < w.length; i++) {
+      tn[cat[i]]++;
+      if (used[i]) { uw[cat[i]] += w[i]; un[cat[i]]++; }
+    }
+    const add = [0, 1].map(c => (tn[c] - un[c] > 0 ? uw[c] / (tn[c] - un[c]) : 0));
+    let tot = 0;
+    for (let i = 0; i < w.length; i++) { out[i] = used[i] ? 0 : w[i] + add[cat[i]]; tot += out[i]; }
+    return tot;
+  }
+  function draw(e, tot, rnd) {
+    let rr = rnd() * tot, last = -1;
+    for (let i = 0; i < e.length; i++) {
+      if (e[i] <= 0) continue;
+      last = i; rr -= e[i];
+      if (rr < 0) return i;
+    }
+    return last;
+  }
+  function mulberry(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function availEff(pool, names) {
+    const w = pool.map(p => Number(p[1])), cat = catsOf(pool), e = new Float64Array(w.length);
+    const used = pool.map(p => (names.has(p[0]) ? 1 : 0));
+    eff(w, cat, used, e);
+    const out = [];
+    pool.forEach((p, i) => { if (!used[i]) out.push([p[0], e[i], p[2]]); });
+    return out;
+  }
+  function single(pool, idxs, ti) {
+    const w = pool.map(p => Number(p[1])), cat = catsOf(pool), e = new Float64Array(w.length);
+    const used = new Uint8Array(w.length);
+    idxs.forEach(i => { used[i] = 1; });
+    const tot = eff(w, cat, used, e);
+    return tot > 0 ? e[ti] / tot : 0;
+  }
+  const CACHE = new Map();
+  window.soulRuns = function (pool, lines, locked, targets) {
+    const key = 'v9' + JSON.stringify([pool.map(p => [p[0], p[1], p[2]]), lines, locked, targets]);
+    if (CACHE.has(key)) return CACHE.get(key);
+    const names = pool.map(p => p[0]), w = pool.map(p => Number(p[1])), cat = catsOf(pool), m = w.length;
+    const at = new Map(names.map((n, i) => [n, i]));
+    const cur = lines.map(n => (at.has(n) ? at.get(n) : -1));
+    const tgt = new Set(targets.filter(n => at.has(n)).map(n => at.get(n)));
+    const cand = [];
+    lines.forEach((n, i) => { if (cur[i] >= 0 && !locked.includes(i) && !tgt.has(cur[i])) cand.push(i); });
+    let res = null;
+    if (cand.length && tgt.size) {
+      const runs = 6000, rnd = mulberry(20261119);
+      res = new Uint32Array(runs);
+      const e = new Float64Array(m);
+      for (let r = 0; r < runs; r++) {
+        const c = cur.slice(), used = new Uint8Array(m);
+        for (const i of c) if (i >= 0) used[i] = 1;
+        let att = 0;
+        while (att < 50000) {
+          att++;
+          let li = cand[0];
+          for (const k of cand) if (w[c[k]] < w[c[li]] - 1e-12) li = k;
+          const tot = eff(w, cat, used, e);
+          const x = draw(e, tot, rnd);
+          if (x < 0 || tgt.has(x)) break;
+          used[c[li]] = 0; used[x] = 1; c[li] = x;
+        }
+        res[r] = att;
+      }
+      res.sort();
+    }
+    if (CACHE.size > 12) CACHE.delete(CACHE.keys().next().value);
+    CACHE.set(key, res);
+    return res;
+  };
+  function poolsNow() {
+    const out = [];
+    const add = (slot, cls) => {
+      try {
+        const all = typeof soulPools === 'function' ? soulPools() : soulPools;
+        if (all && all[slot]) out.push(soulPoolFor(all[slot], slot, cls));
+      } catch (e) {}
+    };
+    try { add(state.soul.slot, state.soul.className); } catch (e) {}
+    try { add(state.soulUpgrades.slot, state.soul.className); } catch (e) {}
+    return out;
+  }
+  const origSim = soulSim;
+  window.soulSim = function (w, start, t, policy, fixedPos, runs, allowed) {
+    const pool = poolsNow().find(p => p.length === w.length && p.every((r, i) => Math.abs(Number(r[1]) - w[i]) < 1e-9));
+    if (!pool) return origSim.apply(this, arguments);
+    const cat = catsOf(pool), m = w.length, e = new Float64Array(m), res = new Array(runs);
+    for (let r = 0; r < runs; r++) {
+      const cur = start.slice(), used = new Uint8Array(m);
+      cur.forEach(i => { used[i] = 1; });
+      let att = 0;
+      while (att < 50000) {
+        att++;
+        let li = fixedPos;
+        if (policy === 'low') {
+          li = allowed[0];
+          for (const k of allowed) if (w[cur[k]] < w[cur[li]] - 1e-12) li = k;
+        }
+        const tot = eff(w, cat, used, e);
+        const x = draw(e, tot, Math.random);
+        if (x < 0 || x === t) break;
+        used[cur[li]] = 0; used[x] = 1; cur[li] = x;
+      }
+      res[r] = att;
+    }
+    res.sort((a, b) => a - b);
+    const q = f => res[Math.min(runs - 1, Math.floor(f * runs))];
+    return { mean: res.reduce((a, b) => a + b, 0) / runs, median: q(0.5), p90: q(0.9), p99: q(0.99) };
+  };
+  const origOutcome = soulOutcome;
+  window.soulOutcome = function (pool, lines, locked, targets) {
+    const o = origOutcome.apply(this, arguments);
+    if (!o || o.message || !o.hits) return o;
+    const w = pool.map(p => Number(p[1])), cat = catsOf(pool), e = new Float64Array(w.length);
+    const have = new Set(lines.filter(Boolean));
+    const used = pool.map(p => (have.has(p[0]) ? 1 : 0));
+    const tot = eff(w, cat, used, e);
+    const hitNames = new Set(o.hits.map(h => h[0]));
+    let s = 0;
+    pool.forEach((p, i) => { if (hitNames.has(p[0])) s += e[i]; });
+    o.p = tot > 0 ? s / tot : 0;
+    return o;
+  };
+  window.__soulV9 = { eff, catsOf, availEff, single };
 })();
 
 </script>
