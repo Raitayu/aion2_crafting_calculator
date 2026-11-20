@@ -803,4 +803,48 @@ $('rexport').onclick=()=>download('aion2-recipes.json',pack);$('rimport').onclic
 $('rreset').onclick=()=>{if(!confirm('Discard all recipe edits and return to the built-in recipes?'))return;pack=defaultPack();delete state.pack;save();popFamilies();fillStages(true);render();renderEditor();$('rstatus').innerHTML='<span class="ok">Built-in recipes restored</span>';};
 $('ver').textContent=APP_VERSION;
 $('server').innerHTML=['Elyos','Asmodian'].map(f=>`<optgroup label="Europe — ${f}">${DATA.servers.filter(s=>s.faction===f).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`).join('');$('server').value=server;serverLabel();popFamilies();$('family').value=pack.families.Greatsword?'Greatsword':Object.keys(pack.families)[0];$('redit').value=$('family').value;$('family').onchange=()=>{$('redit').value=$('family').value;change();renderEditor();};['start','target','qty','model'].forEach(k=>$(k).onchange=render);change();renderEditor();applyUI();showTab(state.ui.tab);showBanner();if(Date.now()-(+state.ui.lastCheck||0)>6*3600*1000)checkUpdate(false);
-</script></html>
+</script><script>
+/*paste-stats-v2*/
+(function(){
+if(window.__pasteStatsV2)return;
+if(typeof DMG_DEFAULT==='undefined'||typeof DMG_FIELDS==='undefined'){console.error('Paste stats patch: damage model constants not found');return;}
+window.__pasteStatsV2=1;
+DMG_DEFAULT.atk=2176;DMG_DEFAULT.ab=285;DMG_DEFAULT.chi=8.3;
+{const i=DMG_FIELDS.findIndex(f=>f[0]==='atk');DMG_FIELDS[i]=['atk','Attack + average of Min/Max Attack (before boosts)',''];DMG_FIELDS.splice(i+1,0,['ab','Attack Bonus','']);const j=DMG_FIELDS.findIndex(f=>f[0]==='crit');DMG_FIELDS.splice(j+1,0,['chi','Critical Hit increase (already inside your Critical Hit total)','%']);}
+window.dmgModelBase=function(s){const back=s.side==='back',
+ c=Math.min(0.5,Math.max(0,(s.crit+(back?s.backCrit:s.frontCrit)-s.critResist)/1000)),
+ posAtk=back?s.backAtk:s.frontAtk,posDb=back?s.backDb:s.frontDb,
+ A=((s.atk*(1+s.wdb/100))+(s.ab||0))*(1+s.ai/100)+s.pveAtk+s.bossAtk+posAtk+c*s.critAtk,
+ pile=Math.max(0,1+(s.db+s.pveDb+s.bossDb-s.tol)/100),
+ crit=c*(1.5+(s.cdb-s.critTol)/100)+(1-c),
+ dbl=1+Math.max(0,s.double-s.doubleRes)/100,
+ prf=1+0.075*Math.max(0,s.perfect)/100,
+ p1=Math.min(1,0.2+s.multi/100),pn=Math.min(1,0.5+s.multi/100),E=p1+p1*pn+p1*pn*pn+p1*pn*pn*pn,mh=1+0.0575*E;
+ return A*pile*(1+posDb/100)*crit*dbl*prf*mh*Math.pow(1+Math.min(200,Math.max(0,s.cs))/100,Math.min(100,Math.max(0,s.csEff))/100);};
+window.dmgApplyBase=function(s,name,v){const t={...s};switch(name){case 'Attack':t.atk+=v;break;case 'Attack Bonus':t.ab=(t.ab||0)+v;break;case 'Attack increase':t.ai+=v;break;case 'Might':t.ai+=0.1*v;break;case 'Weapon Damage Boost':t.wdb+=v;break;case 'Damage Boost':t.db+=v;break;case 'Critical Damage Boost':t.cdb+=v;break;case 'Critical Hit':t.crit+=v*(1+(t.chi||0)/100);break;case 'Critical Attack':t.critAtk+=v;break;case 'Front Attack':t.frontAtk+=v;break;case 'Back Attack':t.backAtk+=v;break;case 'Double Chance':t.double+=v;break;case 'Perfect Chance':t.perfect+=v;break;case 'Multi-hit Chance':t.multi+=v;break;case 'PvE Damage Boost':t.pveDb+=v;break;case 'Front Attack Damage Boost':t.frontDb+=v;break;case 'Back Attack Damage Boost':t.backDb+=v;break;case 'Combat Speed':t.cs+=v;break;}return t;};
+const MAP={'Attack Bonus':'ab','Attack increase':'ai','Weapon Damage Boost':'wdb','Damage Boost':'db','PvE Damage Boost':'pveDb','Boss Damage Boost':'bossDb','Critical Damage Boost':'cdb','Critical Hit':'crit','Critical Hit increase':'chi','Front Attack Critical Hit':'frontCrit','Back Attack Critical Hit':'backCrit','Critical Attack':'critAtk','PvE Attack':'pveAtk','Boss Attack':'bossAtk','Front Attack':'frontAtk','Back Attack':'backAtk','Front Attack Damage Boost':'frontDb','Back Attack Damage Boost':'backDb','Double Chance':'double','Multi-hit Chance':'multi','Perfect Chance':'perfect','Combat Speed':'cs'};
+const NUM=/^-?[\d,]*\.?\d+%?$/;
+window.dmgParseStats=function(text){const L=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),m={};
+ for(let i=0;i<L.length-1;i++){if(!NUM.test(L[i])&&NUM.test(L[i+1])){if(!(L[i] in m))m[L[i]]=parseFloat(L[i+1].replace(/,/g,''));i++;}}return m;};
+window.dmgApplyPaste=function(text){const m=window.dmgParseStats(text);
+ for(const k of ['Attack','Min Attack','Max Attack'])if(!Number.isFinite(m[k]))return 'Could not find "'+k+'" in the pasted text. Copy the whole Stats list from the Questlog app.';
+ dmgSheet();const u=state.ui.dmg??={};const filled=[];
+ u.atk=String(m['Attack']+(m['Min Attack']+m['Max Attack'])/2);filled.push('atk');
+ for(const [n,k] of Object.entries(MAP))if(Number.isFinite(m[n])){u[k]=String(m[n]);filled.push(k);}
+ save();window.__pasteMsg='Filled '+filled.length+' fields. PvP and status-effect lines were ignored. Fields not on the list (boss resists, skills, side) are unchanged.';return window.__pasteMsg;};
+const oH=window.dmgHtml;
+window.dmgHtml=function(){let h=oH();if(!h)return h;const u=(state.ui&&state.ui.dmg)||{};
+ const warn=u.ab===undefined?'<p class="warn">The Attack field now means Attack plus the average weapon roll, before Weapon Damage Boost and Attack increase. Values entered earlier used another meaning, so paste your stats below to refresh them.</p>':'';
+ const box='<div class="card" id="dmgpastebox"><h4>Paste Questlog stats</h4><p class="muted">Copy the whole Stats list from the Questlog app and paste it here. PvP stats and status effects are ignored.</p>'+warn+'<textarea id="dmgpaste" style="height:110px" placeholder="Stats&#10;Without temporary effects.&#10;Might&#10;66&#10;..."></textarea><p><button type="button" id="dmgpastego">Apply pasted stats</button> <span id="dmgpastemsg" class="muted">'+(window.__pasteMsg||'')+'</span></p></div>';
+ const s=dmgSheet(),calc=(s.atk+(s.ab||0))*(1+s.ai/100),ig=u.ingameAtk,hasIg=ig!==undefined&&ig!==''&&ig!==null&&Number.isFinite(+ig),f0=x=>Math.round(x).toLocaleString('en-US');
+ let st='<span class="muted">Type your in-game Attack to compare.</span>';
+ if(hasIg){const d=calc-(+ig);st=Math.abs(d)<=Math.max(3,calc*0.002)?'<span class="ok">Matches the game (difference '+(d>=0?'+':'')+d.toFixed(1)+', within rounding).</span>':'<span class="bad">Differs by '+(d>=0?'+':'')+f0(d)+'. Check Attack, Min/Max Attack, Attack Bonus and Attack increase against your stat window.</span>';}
+ const chk='<div class="card" id="dmgattackcheck"><h4>Attack check</h4><p>Calculated Attack: <b>'+f0(calc)+'</b> <span class="muted">= ('+f0(s.atk)+' + '+f0(s.ab||0)+') x (1 + '+s.ai+'%)</span></p><label class="dmg-f"><span>In-game Attack (the big Attack number in your stat window)</span><input type="number" step="any" data-dmg="ingameAtk" value="'+(hasIg?esc(String(ig)):'')+'"></label><p>'+st+'</p><p class="muted">The in-game Attack ignores Weapon Damage Boost, which only the damage model applies. The Attack increase is shown to one decimal, so a difference of a few points is normal.</p></div>';
+ return h.replace('<div class="dmg-grid">',box+chk+'<div class="dmg-grid">');};
+const oW=window.dmgWire;
+window.dmgWire=function(box){oW(box);const b=box.querySelector('#dmgpastego');if(b)b.onclick=()=>{const t=box.querySelector('#dmgpaste').value;const r=window.dmgApplyPaste(t);if(/^Filled/.test(r))renderChar();else box.querySelector('#dmgpastemsg').textContent=r;};};
+if(typeof renderChar==='function'&&typeof state!=='undefined'&&state.char)try{renderChar();}catch(e){}
+})();
+
+</script>
+</html>
