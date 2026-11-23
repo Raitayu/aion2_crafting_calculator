@@ -1718,4 +1718,96 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
 })();
 
 </script>
+<script>
+
+/*passive-values-v1*/
+(function () {
+  if (window.__passiveValuesV1) return;
+  const miss = ['dmgSheet', 'dmgApply', 'dmgModel', 'dmgIsSkill', 'dmgHtml', 'soulPools', 'soulPoolFor', 'soulSkillKind', 'soulIsSkill', 'CHAR_SLOTS', 'renderChar', 'esc']
+    .filter(n => { try { return typeof eval(n) === 'undefined'; } catch (e) { return true; } });
+  if (miss.length || typeof state === 'undefined') { console.error('Passive values patch NOT applied, missing:', miss.join(', ')); window.__passiveValuesV1 = 'missing: ' + miss.join(', '); return; }
+  window.__passiveValuesV1 = 1;
+
+  // the passives of the loaded character's class (the soulbind lines that read "Lv. +1")
+  let memo = { key: '', at: 0, set: new Set() };
+  function passiveNames() {
+    const cls = state.char && state.char.profile && state.char.profile.className, now = Date.now();
+    if (memo.key === cls && now - memo.at < 3000) return memo.set;
+    const set = new Set();
+    try {
+      const pools = soulPools(), classes = ['Gladiator'].concat(typeof SOUL_CLASSES !== 'undefined' ? Object.keys(SOUL_CLASSES) : []), c = classes.includes(cls) ? cls : 'Gladiator';
+      for (const [sn, slot] of CHAR_SLOTS) {
+        if (!slot || !pools[slot] || soulSkillKind(slot) !== 'Passives') continue;
+        for (const e of soulPoolFor(pools[slot], slot, c)) if (soulIsSkill(e[2])) set.add(e[0]);
+      }
+    } catch (e) { console.error(e); }
+    memo = { key: cls, at: now, set };
+    return set;
+  }
+
+  // 1. the sheet carries the typed values
+  const oSheet = window.dmgSheet;
+  window.dmgSheet = function () {
+    const s = oSheet.apply(this, arguments);
+    const pv = state.ui && state.ui.dmg && state.ui.dmg.pv;
+    if (pv) { const o = {}; let n = 0; for (const k of Object.keys(pv)) { const v = +pv[k]; if (pv[k] !== '' && pv[k] !== null && Number.isFinite(v)) { o[k] = v; n++; } } if (n) s.pv = o; }
+    return s;
+  };
+  // 2. +1 rank of such a passive multiplies damage by (1 + value%)
+  const oApply = window.dmgApply;
+  window.dmgApply = function (s, name, v) {
+    const pv = s.pv;
+    if (pv) { const n = String(name).replace(/ rank$/, ''), p = pv[n]; if (p !== undefined && Number.isFinite(p)) { const t = { ...s }; t.pvMul = (s.pvMul || 1) * Math.pow(1 + p / 100, v); return t; } }
+    return oApply.apply(this, arguments);
+  };
+  const oModel = window.dmgModel;
+  window.dmgModel = function (s) { const m = oModel(s); return s.pvMul ? m * s.pvMul : m; };
+  // 3. every class passive counts as a +1 line (it changes nothing unless a value is typed)
+  const oIs = window.dmgIsSkill;
+  window.dmgIsSkill = function (n) { return oIs(n) || passiveNames().has(String(n).replace(/ rank$/, '')); };
+
+  // 4. editable rows in "What a bit more of each stat is worth"
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const num = t => { const v = parseFloat(String(t).replace(/[%,\s]/g, '')); return Number.isFinite(v) ? v : ''; };
+  const oHtml = window.dmgHtml;
+  window.dmgHtml = function () {
+    let h = oHtml.apply(this, arguments);
+    try { h = decorate(h); } catch (e) { console.error(e); }
+    return h;
+  };
+  function decorate(h) {
+    if (!h || typeof h !== 'string') return h;
+    const mark = h.indexOf('What a bit more of each stat is worth');
+    if (mark < 0) return h;
+    const names = Array.from(passiveNames()).sort(), pv = (state.ui.dmg && state.ui.dmg.pv) || {};
+    const cell = (n, shown, on) => '<input type="number" step="any" data-pv="' + esc(n) + '" value="' + esc(String(shown)) + '" placeholder="0" style="width:90px' + (on ? ';border-color:#e8c577' : '') + '" title="Damage change in % for +1 rank of ' + esc(n) + '. Empty = use the model.' + '"> %';
+    let head = h.slice(0, mark), tail = h.slice(mark);
+    const extra = [];
+    for (const n of names) {
+      const on = pv[n] !== undefined && pv[n] !== '' && Number.isFinite(+pv[n]);
+      const re = new RegExp('<tr><td>' + reEsc(esc(n)) + ' rank</td><td>([^<]*)</td><td>([^<]*)</td></tr>');
+      const m = re.exec(tail);
+      if (m) tail = tail.replace(re, '<tr><td>' + esc(n) + ' rank</td><td>' + m[1] + '</td><td>' + cell(n, on ? pv[n] : num(m[2]), on) + '</td></tr>');
+      else extra.push('<tr><td>' + esc(n) + ' rank</td><td>+1</td><td>' + cell(n, on ? pv[n] : '', on) + '</td></tr>');
+    }
+    const t = tail.indexOf('</table>');
+    if (t >= 0) {
+      const note = '<p class="muted">The passive rows are editable. Type the damage change in % that +1 rank of that passive is worth to you. It is used for the reroll suggestions below. Leave a box empty to use the model\'s own value (0% for passives it does not model, such as the defensive ones).</p>';
+      const close = tail.indexOf('</div>', t);
+      tail = tail.slice(0, t) + extra.join('') + tail.slice(t, close >= 0 ? close + 6 : t + 8) + note + (close >= 0 ? tail.slice(close + 6) : tail.slice(t + 8));
+    }
+    return head + tail;
+  }
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (!el || !el.dataset || el.dataset.pv === undefined) return;
+    state.ui.dmg = state.ui.dmg || {};
+    const pv = (state.ui.dmg.pv = state.ui.dmg.pv || {}), raw = el.value;
+    if (raw === '' || !Number.isFinite(+raw)) delete pv[el.dataset.pv]; else pv[el.dataset.pv] = +raw;
+    if (!Object.keys(pv).length) delete state.ui.dmg.pv;
+    save(); renderChar();
+  });
+})();
+
+</script>
 </html>
