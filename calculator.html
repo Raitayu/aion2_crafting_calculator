@@ -1640,4 +1640,82 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
 })();
 
 </script>
+<script>
+
+/*speed-v9*/
+(function () {
+  if (window.__speedV9) return;
+  const miss = ['DMG_ROLL_CACHE', 'CHAR_SLOTS', 'dmgRank', 'renderChar', 'soulPools', 'dmgSheet', 'dmgLines', 'dmgModelBase', 'dmgApplyBase', 'dmgRollout', 'dmgSkillFactor', 'dmgApply', 'dmgModel']
+    .filter(n => { try { return typeof eval(n) === 'undefined'; } catch (e) { return true; } });
+  if (miss.length || typeof state === 'undefined') { console.error('Speed patch v9 NOT applied, missing:', miss.join(', ')); window.__speedV9 = 'missing: ' + miss.join(', '); return; }
+  window.__speedV9 = 1;
+
+  // ---- 1. persistent cache for the reroll simulation
+  const KEY = 'aion2_roll_cache_v9', MAXE = 80;
+  const hash = s => { let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); };
+  const codeSig = (() => { try { return hash([dmgModelBase, dmgApplyBase, dmgRollout, dmgSkillFactor, dmgApply, dmgModel].map(String).join('~') + JSON.stringify(typeof DMG_SKILL_LIST !== 'undefined' ? DMG_SKILL_LIST : []) + JSON.stringify(typeof DMG_PASSIVES !== 'undefined' ? DMG_PASSIVES : []) + (typeof DMG_G !== 'undefined' ? DMG_G.join(',') : '')); } catch (e) { return 'x'; } })();
+  let disk = { e: {} };
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.e) disk = d; } catch (e) {}
+  const okEntry = v => Array.isArray(v) && v.every(x => x && Number.isFinite(x.mean) && Number.isFinite(x.pUp));
+  let poolStr = '', poolAt = 0;
+  const salt = () => { const now = Date.now(); if (now - poolAt > 300) { try { poolStr = JSON.stringify(soulPools()); } catch (e) { poolStr = ''; } poolAt = now; } const c = state.char && state.char.profile && state.char.profile.className; return codeSig + '|' + c + '|' + poolStr; };
+  const hk = k => hash(k + '|' + salt());
+  const M = DMG_ROLL_CACHE, g0 = M.get.bind(M), s0 = M.set.bind(M);
+  let saveT = 0;
+  const flush = () => { try { localStorage.setItem(KEY, JSON.stringify(disk)); } catch (e) { } }, persist = () => { clearTimeout(saveT); saveT = setTimeout(flush, 60); };
+  window.addEventListener('pagehide', flush);
+  M.get = function (k) { const v = g0(k); if (v !== undefined) return v; const d = disk.e[hk(k)]; if (d && okEntry(d)) { s0(k, d); return d; } return undefined; };
+  M.set = function (k, v) {
+    const r = s0(k, v);
+    if (okEntry(v)) { const h = hk(k); delete disk.e[h]; disk.e[h] = v; const ks = Object.keys(disk.e); if (ks.length > MAXE) for (const x of ks.slice(0, ks.length - MAXE)) delete disk.e[x]; persist(); }
+    return r;
+  };
+
+  // ---- 2 and 3. no calculation on page load; background warm-up one slot at a time
+  let W = false, gen = 0, warmSig = null, running = false;
+  try { Object.defineProperty(window, '__dmgWarm', { configurable: true, get() { return W; }, set(v) { /* ignore the old 30 ms timer */ } }); } catch (e) { }
+  const visible = id => { const e = document.getElementById(id); return !!e && !e.hidden; };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const rerender = () => {
+    try { if (visible('pChar')) oRender(); } catch (e) { console.error(e); }
+    try { if (visible('pUpg') && window.__upg && window.__upg.render) window.__upg.render(); } catch (e) { }
+  };
+  function sig() {
+    const c = state.char; if (!c) return 'none';
+    const lines = [];
+    for (const [sn, slot] of CHAR_SLOTS) { const eq = c.equipment && c.equipment.find(e => e.slotPosName === sn), it = eq && c.items && c.items[eq.slotPos]; if (it && !it.error) { try { lines.push([sn, eq.name, dmgLines(it, eq).map(l => [l.name, l.value])]); } catch (e) { } } }
+    return JSON.stringify([c.profile && c.profile.className, c.profile && c.profile.characterName, Object.entries(dmgSheet()), lines]);
+  }
+  async function warm(s, my) {
+    running = true;
+    const orig = CHAR_SLOTS.slice(), t0 = performance.now();
+    await wait(60);
+    for (const e of orig) {
+      if (my !== gen) { running = false; return; }
+      const keep = W; W = true;
+      try { CHAR_SLOTS.splice(0, CHAR_SLOTS.length, e); dmgRank(); } catch (err) { console.error('warm-up slot failed', err); }
+      finally { CHAR_SLOTS.splice(0, CHAR_SLOTS.length, ...orig); W = keep; }
+      await wait(8);
+    }
+    running = false;
+    if (my !== gen) return;
+    warmSig = s; W = true; window.__speedV9ms = Math.round(performance.now() - t0);
+    rerender();
+  }
+  function ensure() {
+    let s; try { s = sig(); } catch (e) { s = null; }
+    if (s === null) { W = true; return; }
+    if (s === warmSig && W) return;
+    if (s === 'none') { warmSig = s; W = true; return; }
+    if (running && s === window.__speedV9pending) return;
+    gen++; W = false; window.__speedV9pending = s;
+    setTimeout(() => { if (gen) warm(s, gen); }, 0);
+  }
+  window.__dmgDefer = function () { ensure(); return []; };
+  const oRender = window.renderChar;
+  window.renderChar = function () { try { ensure(); } catch (e) { console.error(e); } return oRender.apply(this, arguments); };
+  window.__speedV9info = () => ({ warm: W, running, cached: Object.keys(disk.e).length, ms: window.__speedV9ms });
+})();
+
+</script>
 </html>
