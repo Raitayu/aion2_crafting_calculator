@@ -1810,4 +1810,198 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
 })();
 
 </script>
+<script>
+
+/*arcana-tab-v4*/
+(function () {
+  if (window.arcanaTabV4) return;
+  if (typeof state === 'undefined' || typeof $ !== 'function' || typeof window.showTab !== 'function' || typeof save !== 'function') { console.error('Arcana tab NOT applied: calculator functions not found'); window.arcanaTabV4 = 'missing'; return; }
+  window.arcanaTabV4 = 1;
+
+  const TYPES = {
+    Chalice: { pool: 22, short: 'any of your 22 skills', pools: 'The Chalice can roll any of your 22 class skills, actives and passives.', vigor: 'Time [Siel]: Combat Speed, Double Resist', magic: 'Space [Israphel]: Move Speed, Block Chance' },
+    Parchment: { pool: 6, short: '6 active skills', pools: 'The Parchment rolls from 6 of your active skills.', vigor: 'Life [Yustiel]: HP, Regeneration Activation Chance', magic: 'Destiny [Marchutan]: MP, Endurance Chance' },
+    Compass: { pool: 6, short: '6 other active skills', pools: 'The Compass rolls from the other 6 of your active skills.', vigor: 'Freedom [Vaizel]: Accuracy, Evasion', magic: 'Death [Triniel]: Critical Hit, Regeneration Penetration' },
+    Bell: { pool: 5, short: '5 passive skills', pools: 'The Bell rolls from 5 of your passive skills.', vigor: 'Justice [Nezekan]: Defense, Perfect Activation Chance', magic: 'Destruction [Zikel]: Attack, Perfect Resist' },
+    Mirror: { pool: 5, short: '5 other passive skills', pools: 'The Mirror rolls from the other 5 of your passive skills.', vigor: 'Illusion [Kaisinel]: Cooldown Reduction, Endurance Penetration', magic: 'Wisdom [Lumiel]: MP Cost Reduction, Double Chance' }
+  };
+  const DEF = { type: 'Chalice', pool: 22, levels: [1], need: 1, setOn: true, setOdds: 50, lines: 4, ups: 5, start: 1, cap: 4 };
+
+  const comb = (n, k) => { if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const hyper = (N, D, n, j) => comb(D, j) * comb(N - D, n - j) / comb(N, n);
+  // each level-up goes to a random line on the card that is not yet at its highest level
+  function gainStates(n, ups, maxG) {
+    let cur = new Map([[new Array(n).fill(0).join(','), 1]]);
+    for (let u = 0; u < ups; u++) {
+      const nxt = new Map();
+      for (const [key, p] of cur) {
+        const g = key.split(',').map(Number), open = g.map((x, i) => x < maxG ? i : -1).filter(i => i >= 0);
+        if (!open.length) { nxt.set(key, (nxt.get(key) || 0) + p); continue; }
+        for (const i of open) { const h = g.slice(); h[i]++; const k2 = h.join(','); nxt.set(k2, (nxt.get(k2) || 0) + p / open.length); }
+      }
+      cur = nxt;
+    }
+    return cur;
+  }
+  // The hunted skills that are on the card sit in the first j slots (all slots are alike). Each has its own level goal th[i].
+  function levelProbFor(th, need, start, states) {
+    let p = 0;
+    for (const [g, pr] of states) { let ok = 0; for (let i = 0; i < th.length; i++) if (start + g[i] >= th[i]) ok++; if (ok >= need) p += pr; }
+    return p;
+  }
+  function calc(c) {
+    const n = Math.min(c.lines, c.pool), maxG = Math.max(0, c.cap - c.start), D = c.levels.length;
+    const states = Array.from(gainStates(n, c.ups, maxG), ([k, p]) => [k.split(',').map(Number), p]);
+    const memo = new Map(), rows = []; let pLines = 0, pAll = 0;
+    for (let j = 0; j <= Math.min(D, n); j++) {
+      const pj = hyper(c.pool, D, n, j), ok = j >= c.need;
+      let pl = 0;
+      if (ok) {
+        let sum = 0, cnt = 0;
+        const rec = (from, pick) => {
+          if (pick.length === j) {
+            const th = pick.map(i => c.levels[i]).sort((x, y) => x - y), key = th.join(',');
+            let v = memo.get(key); if (v === undefined) { v = levelProbFor(th, c.need, c.start, states); memo.set(key, v); }
+            sum += v; cnt++; return;
+          }
+          for (let i = from; i < D; i++) { pick.push(i); rec(i + 1, pick); pick.pop(); }
+        };
+        rec(0, []);
+        pl = cnt ? sum / cnt : 0;
+      }
+      rows.push({ j, pj, ok, pl, contrib: pj * pl });
+      if (ok) pLines += pj;
+      pAll += pj * pl;
+    }
+    const pSet = c.setOn ? c.setOdds / 100 : 1;
+    return { rows, pSet, pLines, pLevels: pLines > 0 ? pAll / pLines : 0, pTotal: pSet * pAll, n, D };
+  }
+  const cardsFor = (p, q) => p <= 0 ? Infinity : p >= 1 ? 1 : Math.ceil(Math.log(1 - q) / Math.log(1 - p));
+
+  const cfg = () => { const u = (state.ui = state.ui || {}); u.arcana = Object.assign({}, DEF, u.arcana || {}); if (!Array.isArray(u.arcana.levels)) u.arcana.levels = [1]; return u.arcana; };
+  const pc = p => { if (!isFinite(p)) return '-'; const v = p * 100; return (v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toExponential(1)) + '%'; };
+  const nf = n => isFinite(n) ? Math.round(n).toLocaleString('en-US') : 'never';
+  const one = p => p > 0 ? '1 in ' + (1 / p >= 100 ? nf(1 / p) : (1 / p).toFixed(1)) : 'never';
+  const esc2 = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function style() {
+    if (document.getElementById('arcstyle')) return;
+    const s = document.createElement('style'); s.id = 'arcstyle';
+    s.textContent = `
+#pArc .ac-types{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+#pArc .ac-type{flex:1 1 130px;text-align:left;background:#141d2a;border:1px solid #344155;border-radius:12px;padding:10px 12px;color:#e5eaf2;cursor:pointer;transition:.15s}
+#pArc .ac-type b{display:block;font-size:15px}#pArc .ac-type span{font-size:11.5px;color:#aab6c9}
+#pArc .ac-type:hover{border-color:#8a7a4a}
+#pArc .ac-type.on{background:linear-gradient(135deg,#3a3320,#1b2431);border-color:#e8c577}#pArc .ac-type.on b{color:#e8c577}
+#pArc .ac-ask{background:#101925;border:1px solid #344155;border-radius:14px;padding:6px 18px;margin:10px 0}
+#pArc .ac-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:11px 0;font-size:15px;line-height:1.5;border-bottom:1px solid #1d2838}
+#pArc .ac-row:last-child{border-bottom:0}
+#pArc .ac-row input[type=number],#pArc .ac-row select{border-radius:8px;padding:7px 9px;font-size:15px;font-weight:700;color:#e8c577}
+#pArc .ac-row input[type=number]{width:78px;text-align:center}
+#pArc .ac-sk{padding:7px 0 7px 36px;border-bottom:0}
+#pArc .ac-n{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:#26344a;color:#e8c577;font-weight:800;font-size:13px}
+#pArc .ac-mini{background:#26344a;border:1px solid #52617a;border-radius:8px;color:#c5d0e3;padding:4px 10px;font-size:12px;cursor:pointer}#pArc .ac-mini:hover{border-color:#e8c577}
+#pArc .ac-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#2d3a52,#101925);border:1px solid #52617a;border-radius:16px;padding:18px 22px;margin:14px 0}
+#pArc .ac-hero:before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:linear-gradient(#e8c577,#b8923c)}
+#pArc .ac-k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#aab6c9}
+#pArc .ac-big{font-size:44px;font-weight:800;color:#e8c577;line-height:1.1}
+#pArc .ac-sub{font-size:16px;color:#e5eaf2;margin-top:2px}
+#pArc .ac-chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+#pArc .ac-chip{background:#141d2a;border:1px solid #344155;border-radius:10px;padding:8px 12px;font-size:13px;color:#aab6c9}#pArc .ac-chip b{display:block;font-size:17px;color:#e5eaf2}
+#pArc .ac-steps{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:6px 0 14px}
+#pArc .ac-step{flex:1 1 170px;background:#141d2a;border-radius:12px;padding:10px 12px;border:1px solid #26344a}
+#pArc .ac-step b{display:block;font-size:20px;color:var(--c,#e8c577)}#pArc .ac-step span{font-size:12px;color:#aab6c9}
+#pArc .ac-x{align-self:center;color:#6c7a92;font-size:20px}
+#pArc .ac-bar{height:6px;border-radius:4px;background:#26344a;overflow:hidden;margin-top:6px}#pArc .ac-bar>i{display:block;height:100%;background:var(--c,#e8c577)}
+#pArc details{background:#101925;border:1px solid #344155;border-radius:12px;padding:8px 14px;margin:12px 0}
+#pArc summary{cursor:pointer;color:#e8c577;font-weight:700}
+#pArc .ac-adv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
+#pArc .ac-adv label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#aab6c9;margin:0}
+#pArc .ac-adv input{border-radius:8px;padding:7px 9px}
+#pArc table.ac{border-collapse:separate;border-spacing:0 5px;width:100%}
+#pArc table.ac th{color:#aab6c9;font-size:11px;text-transform:uppercase;text-align:right;padding:4px 10px}
+#pArc table.ac td{background:#141d2a;padding:7px 10px;text-align:right}
+#pArc table.ac td:first-child,#pArc table.ac th:first-child{text-align:left}
+#pArc tr.off td{opacity:.45}`;
+    document.head.appendChild(s);
+  }
+  function dom() {
+    style();
+    if (document.getElementById('pArc')) return;
+    const host = document.getElementById('pUpg') || document.getElementById('pChar') || document.body;
+    const div = document.createElement('div'); div.id = 'pArc'; div.hidden = true;
+    div.innerHTML = '<section><h2>Arcana odds</h2><p class="muted">Pick a card type, list the skills you are hunting and the level each one needs, and see how likely one new card is to have them.</p><div id="acout"></div></section>';
+    host.insertAdjacentElement('afterend', div);
+    div.addEventListener('change', onChange);
+    div.addEventListener('click', onClick);
+    const tb = document.createElement('button'); tb.id = 'tabA'; tb.className = 'tab'; tb.textContent = 'Arcana';
+    const after = document.getElementById('tabU') || document.getElementById('tabH'); if (after) after.insertAdjacentElement('afterend', tb);
+    tb.onclick = () => window.showTab('A');
+  }
+  function fix(c) {
+    c.pool = Math.max(1, Math.round(c.pool) || 1); c.lines = Math.max(1, Math.min(4, Math.round(c.lines) || 4)); c.lines = Math.min(c.lines, c.pool);
+    c.setOdds = Math.max(0, Math.min(100, +c.setOdds || 0)); c.ups = Math.max(0, Math.min(20, Math.round(c.ups) || 0));
+    c.cap = Math.max(1, Math.min(10, Math.round(c.cap) || 4)); c.start = Math.max(1, Math.min(c.cap, Math.round(c.start) || 1));
+    if (!Array.isArray(c.levels) || !c.levels.length) c.levels = [c.start];
+    c.levels = c.levels.slice(0, Math.min(c.pool, 22)).map(l => Math.max(c.start, Math.min(c.cap, Math.round(l) || c.start)));
+    c.need = Math.max(1, Math.min(c.levels.length, c.lines, Math.round(c.need) || 1));
+  }
+  function onClick(e) {
+    const t = e.target, c = cfg(), b = t.closest && t.closest('[data-actype]');
+    if (b) { const ty = b.dataset.actype; c.type = ty; c.pool = TYPES[ty].pool; fix(c); save(); render(); return; }
+    if (t.dataset && t.dataset.acadd !== undefined) { if (c.levels.length < Math.min(c.pool, 22)) { c.levels.push(c.start); c.need = c.levels.length; } fix(c); save(); render(); return; }
+    if (t.dataset && t.dataset.acdel !== undefined) { c.levels.splice(+t.dataset.acdel, 1); c.need = Math.min(c.need, Math.max(1, c.levels.length)); fix(c); save(); render(); }
+  }
+  function onChange(e) {
+    const t = e.target, c = cfg();
+    if (t.dataset && t.dataset.aclv !== undefined) c.levels[+t.dataset.aclv] = +t.value;
+    else { const k = t.dataset && t.dataset.ac; if (!k) return; if (k === 'setOn') c.setOn = t.checked; else c[k] = +t.value; }
+    fix(c); save(); render();
+  }
+  function render() {
+    dom();
+    const c = cfg(); fix(c); const r = calc(c), T = TYPES[c.type] || TYPES.Chalice, D = c.levels.length;
+    const lvLabel = l => l === c.start ? 'any level' : l === c.cap ? 'level ' + l + ' (max)' : 'level ' + l + ' or higher';
+    const lvSel = (i, cur) => { const o = []; for (let l = c.start; l <= c.cap; l++) o.push('<option value="' + l + '"' + (l === cur ? ' selected' : '') + '>' + lvLabel(l) + '</option>'); return '<select data-aclv="' + i + '">' + o.join('') + '</select>'; };
+    const q = [0.5, 0.9, 0.99].map(x => cardsFor(r.pTotal, x));
+    let h = '<div class="ac-types">' + Object.keys(TYPES).map(t => '<button type="button" class="ac-type' + (t === c.type ? ' on' : '') + '" data-actype="' + t + '"><b>' + t + '</b><span>' + TYPES[t].short + '</span></button>').join('') + '</div>' +
+      '<div class="ac-ask"><div class="ac-row"><span class="ac-n">1</span> <b>The skills I am hunting</b> (this card can roll ' + c.pool + ' skills). Choose the level each one needs:</div>' +
+      c.levels.map((l, i) => '<div class="ac-row ac-sk"><span>Skill ' + (i + 1) + ' at</span> ' + lvSel(i, l) + (D > 1 ? ' <button type="button" class="ac-mini" data-acdel="' + i + '" title="Remove this skill">remove</button>' : '') + '</div>').join('') +
+      '<div class="ac-row"><button type="button" class="ac-mini" data-acadd>+ add another skill</button></div>' +
+      (D > 1 ? '<div class="ac-row"><span class="ac-n">2</span> The card needs at least <input type="number" data-ac="need" min="1" max="' + Math.min(D, c.lines) + '" value="' + c.need + '"> of these ' + D + ' skills at their level' + (c.need === D ? ' (all of them)' : '') + '.</div>' : '') +
+      '<div class="ac-row"><span class="ac-n">' + (D > 1 ? 3 : 2) + '</span> <label style="display:flex;align-items:center;gap:8px;margin:0"><input type="checkbox" data-ac="setOn"' + (c.setOn ? ' checked' : '') + '> The card must also be from the right set (' + (c.setOdds === 50 ? '1 in 2' : c.setOdds + '%') + ' chance)</label></div></div>';
+    h += '<div class="ac-hero"><div class="ac-k">Chance that one new card is what you want</div><div class="ac-big">' + pc(r.pTotal) + '</div><div class="ac-sub">' + (r.pTotal > 0 ? 'about ' + one(r.pTotal) + ' cards' : 'not possible with these settings') + '</div>' +
+      '<div class="ac-chips"><div class="ac-chip">for a coin-flip chance<b>' + nf(q[0]) + ' cards</b></div><div class="ac-chip">for a 90% chance<b>' + nf(q[1]) + ' cards</b></div><div class="ac-chip">for a 99% chance<b>' + nf(q[2]) + ' cards</b></div></div></div>';
+    const step = (label, p, col) => '<div class="ac-step" style="--c:' + col + '"><b>' + pc(p) + '</b><span>' + label + '</span><div class="ac-bar"><i style="width:' + Math.max(1, Math.min(100, Math.pow(p, 0.4) * 100)).toFixed(0) + '%"></i></div></div>';
+    h += '<div class="ac-steps">' + (c.setOn ? step('right set', r.pSet, '#8dc0ff') + '<span class="ac-x">×</span>' : '') +
+      step('your skills show up (' + c.need + '+ of ' + D + ')', r.pLines, '#8fd694') + '<span class="ac-x">×</span>' +
+      step(c.levels.every(l => l === c.start) ? 'levels (no requirement)' : 'levels reach your goals after ' + c.ups + ' level-ups', r.pLevels, '#d1a6ff') + '</div>';
+    h += '<details><summary>Card rules and details</summary><div class="ac-adv">' +
+      '<label>Skills in this card\'s pool<input type="number" data-ac="pool" min="1" max="60" value="' + c.pool + '"></label>' +
+      '<label>Lines on the card<input type="number" data-ac="lines" min="1" max="4" value="' + c.lines + '"></label>' +
+      '<label>Level-ups a card gets<input type="number" data-ac="ups" min="0" max="20" value="' + c.ups + '"></label>' +
+      '<label>Starting level of a line<input type="number" data-ac="start" min="1" max="' + c.cap + '" value="' + c.start + '"></label>' +
+      '<label>Highest level a line can reach<input type="number" data-ac="cap" min="1" max="10" value="' + c.cap + '"></label>' +
+      '<label>Chance of the right set (%)<input type="number" data-ac="setOdds" min="0" max="100" step="any" value="' + c.setOdds + '"></label></div>' +
+      '<p class="ac-s muted">' + esc2(T.pools) + ' Its stats are ' + esc2(T.vigor) + ' (Primal Vigor) or ' + esc2(T.magic) + ' (Magic Armor). Every skill in the pool is equally likely, a skill never appears twice on a card, and each level-up goes to a random line that is not yet at its highest level.</p>' +
+      '<table class="ac"><thead><tr><th>Hunted skills on the card</th><th>Chance of exactly this</th><th>Enough?</th><th>Levels succeed</th></tr></thead><tbody>' +
+      r.rows.map(x => '<tr' + (x.ok ? '' : ' class="off"') + '><td>' + x.j + ' of ' + r.n + '</td><td>' + pc(x.pj) + '</td><td>' + (x.ok ? 'yes' : 'no') + '</td><td>' + (x.ok ? pc(x.pl) : '-') + '</td></tr>').join('') + '</tbody></table></details>';
+    document.getElementById('acout').innerHTML = h;
+  }
+  dom();
+  const prev = window.showTab;
+  window.showTab = function (n) {
+    const a = document.getElementById('pArc'), tb = document.getElementById('tabA');
+    if (n === 'A') {
+      for (const id of ['pPlanner', 'pMat', 'pOwned', 'pCook', 'pSoul', 'pPools', 'pCraft', 'pChar', 'pUpg']) { const e = document.getElementById(id); if (e) e.hidden = true; }
+      for (const t of ['P', 'M', 'O', 'K', 'S', 'L', 'C', 'H', 'U']) { const b = document.getElementById('tab' + t); if (b) b.classList.remove('on'); }
+      if (a) a.hidden = false; if (tb) tb.classList.add('on'); render(); return;
+    }
+    if (a) a.hidden = true; if (tb) tb.classList.remove('on');
+    return prev.apply(this, arguments);
+  };
+  window.__arcana = { calc, hyper, gainStates, cardsFor };
+})();
+
+</script>
 </html>
