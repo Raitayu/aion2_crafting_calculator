@@ -1189,7 +1189,7 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
       const name = SLOT[g.slot];
       if (!name) continue;
       const info = ITEMS.get(String(g.item)) || [3, 'Item ' + g.item];
-      equipment.push({ slotPos: g.slot, slotPosName: name, name: info[1], grade: GRADE[info[0]] || 'Common', enchantLevel: g.enchant || 0, exceedLevel: g.surpass || 0, id: g.item });
+      equipment.push({ slotPos: g.slot, slotPosName: name, name: info[1], grade: GRADE[info[0]] || 'Common', enchantLevel: g.enchant || 0, exceedLevel: g.surpass || 0, id: g.item, itemLevel: g.itemLevel });
       const seen = new Set(), subStats = [];
       for (const s of (g.stats || []).concat(g.soulStats || [])) {
         const n = STAT[s.stat] || ('Stat #' + s.stat);
@@ -1257,6 +1257,267 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
   };
   window.__charJsonOffline = { use, buildChar };
   if (!state.char) { try { window.renderChar(); } catch (e) {} }
+})();
+
+</script>
+<script>
+
+/* upgrades-tab-v1: cheapest upgrade route (enhance / amplify / soulbind rerolls) */
+(function () {
+  if (window.upgradesTabV1) return;
+  const need = {};
+  for (const n of ['showTab', 'save', 'dmgSheet', 'dmgModel', 'dmgApply', 'dmgRank', 'refreshPrices', 'soulCostInfo', 'applySnapshot', 'esc'])
+    need[n] = typeof window[n] === 'function' ? 'ok' : (function () { try { return typeof eval(n); } catch (e) { return 'undefined'; } })();
+  const miss = Object.keys(need).filter(k => need[k] !== 'ok' && need[k] !== 'function');
+  if (typeof state === 'undefined' || typeof $ !== 'function' || miss.length) {
+    console.error('Upgrades tab NOT applied, missing:', miss.join(', '));
+    window.upgradesTabV1 = 'missing: ' + miss.join(', ');
+    return;
+  }
+  window.upgradesTabV1 = 1;
+
+  // ---- data (Global client, MetaBot / AION2Data, Nov 2026). Costs per attempt at item level 102, scaled linearly by item level.
+  const ENH_KINA = [12800, 18300, 33300, 51000, 72000, 94000, 119000, 145000, 173000, 202000, 360000, 540000, 860000, 1340000, 1860000];
+  const ENH_STONE = [510, 730, 1330, 2040, 2860, 3750, 4730, 5770, 6890, 8070, 9310, 10610, 11960, 13360, 14820];
+  const ENH_P = [0.65, 0.5, 0.35, 0.25, 0.2], ENH_B = 0.05;
+  const AMP_P = [0.66, 0.5, 0.33, 0.25, 0.2], AMP_B = [0.05, 0.04, 0.03, 0.02, 0.01];
+  const AMP_KINA = [600000, 900000, 1400000, 2000000, 3000000], AMP_STONE = [6, 9, 12, 15, 20];
+  // stat gain tables measured at item level 86; attack parts scale with item level
+  const W_ATK = [9, 18, 27, 36, 46, 56, 66, 76, 86, 96, 106, 116, 126, 136, 146], W_AMP_ATK = [12, 24, 36, 48, 61], W_AMP_DB = [1, 2, 3, 4, 5];
+  const A_ATK = [4, 8, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57, 62, 67, 72], A_AMP_ATK = [6, 12, 18, 24, 30], A_AMP_DB = [0.5, 1, 1.5, 2, 2.5];
+  const VALID = [36, 41, 43, 44, 45, 46, 51, 54, 56, 62, 65, 70, 78, 86, 94, 102];
+  const FAMILIES = [[/Splendent (Wise|Ebony) Dragon Lord/i, 102], [/Ludra/i, 102], [/(Wise|Ebony) Dragon Lord/i, 94], [/Splendent (White|Dark) Dragon Lord/i, 86],
+    [/(White|Dark) Dragon Lord/i, 78], [/Splendent (True|Star) Dragon Lord/i, 70], [/(True|Star) Dragon Lord/i, 62], [/Enraged Kromede|Nuakum/i, 86],
+    [/Earthly Authority/i, 51], [/Fallen Ancient God/i, 46], [/Spiritforged/i, 45], [/Artisan's Splendent/i, 44], [/Holy Spirit/i, 41], [/^Kromede/i, 43], [/^Wisdom/i, 36], [/Rupture/i, 54], [/Kaira/i, 56]];
+  const CAT = { MainHand: 'weapon', SubHand: 'guard', Helmet: 'armor', Shoulder: 'armor', Torso: 'armor', Pants: 'armor', Gloves: 'armor', Boots: 'armor', Cape: 'armor', Necklace: 'acc', Earring1: 'acc', Earring2: 'acc', Ring1: 'acc', Ring2: 'acc', Bracelet1: 'brace', Bracelet2: 'brace' };
+  const GRADECAP = { Common: 5, Special: 5, Legend: 10, Unique: 15 };
+
+  const ui = () => { const u = (state.ui = state.ui || {}); u.upg = u.upg || { stone: 0, amp: 0, ilvl: {}, cap: {} }; return u.upg; };
+  const lvl = L => L <= 15 ? '+' + L : '+15 Amp ' + (L - 15);
+  const NF = n => (n == null || !isFinite(n)) ? '-' : Math.round(n).toLocaleString('en-US');
+  const gainF = n => (n == null || !isFinite(n)) ? '-' : (Math.round(n * 1000) / 1000).toLocaleString('en-US', { maximumFractionDigits: 3 }) + '%';
+
+  function expAttempts(p0, b) {
+    let e = 0, surv = 1, p = p0;
+    for (let n = 0; n < 300 && surv > 1e-12; n++) { e += surv; surv *= (1 - Math.min(1, p)); p += b; }
+    return e;
+  }
+  function stepInfo(L, ilvl, gcap) {
+    if (L <= 15) {
+      const i = L - 1, risky = gcap >= 15 && L > 10;
+      const att = expAttempts(risky ? ENH_P[L - 11] : 1, risky ? ENH_B : 0);
+      return { att, kina: att * ENH_KINA[i] * ilvl / 102, enh: att * ENH_STONE[i] * ilvl / 102, amp: 0, type: 'Enhance' };
+    }
+    const j = L - 16, att = expAttempts(AMP_P[j], AMP_B[j]);
+    return { att, kina: att * AMP_KINA[j], enh: 0, amp: att * AMP_STONE[j], type: 'Amplify' };
+  }
+  function statsAt(cat, L, ilvl) {
+    const s = ilvl / 86; let atk = 0, db = 0;
+    if (L >= 1) atk += (cat === 'weapon' ? W_ATK : A_ATK)[Math.min(L, 15) - 1] * s;
+    if (L > 15) { const a = L - 16; atk += (cat === 'weapon' ? W_AMP_ATK : A_AMP_ATK)[a] * s; db += (cat === 'weapon' ? W_AMP_DB : A_AMP_DB)[a]; }
+    return { atk, db };
+  }
+  const snap = x => VALID.reduce((b, v) => Math.abs(v - x) < Math.abs(b - x) ? v : b, VALID[0]);
+  const ampCapFor = (ilvl, grade) => grade !== 'Unique' ? 0 : ilvl >= 78 ? 5 : ilvl >= 62 ? 3 : ilvl >= 54 ? 1 : 0;
+
+  function detectIlvl(eq) {
+    const raw = eq.itemLevel != null ? +eq.itemLevel : (state.char && state.char.items && state.char.items[eq.slotPos] && state.char.items[eq.slotPos].itemLevel != null ? +state.char.items[eq.slotPos].itemLevel : null), enc = eq.enchantLevel || 0;
+    if (enc === 0 && raw) return { v: raw, src: 'exact' };
+    for (const [re, v] of FAMILIES) if (re.test(eq.name || '')) return { v, src: 'known set' };
+    if (raw) return { v: eq.grade === 'Unique' ? snap(raw - 2 * enc) : Math.max(1, Math.round(raw - 1.4 * enc)), src: 'estimated' };
+    return { v: 86, src: 'guess' };
+  }
+  function marketAmpPrice() {
+    const c = (state.caches && state.caches[typeof server !== 'undefined' ? server : state.server]) || {};
+    let best = null;
+    for (const [name, e] of Object.entries(c)) {
+      if (!/^Amplify Stone/i.test(name) || /Bound|Fragment/i.test(name)) continue;
+      const p = e && e.price;
+      if (typeof p === 'number' && p > 0 && (!best || p < best.price)) best = { name, price: p };
+    }
+    return best;
+  }
+  function charKey() { const i = state.char && state.char.ids; return i ? String(i.characterId) + ':' + String(i.serverId) : ''; }
+
+  // ---- main computation
+  function compute() {
+    const c = state.char, u = ui();
+    if (!c || !c.equipment) return null;
+    const stoneKina = (+u.stone || 0) / 10000;
+    const mp = marketAmpPrice(), ampPrice = (+u.amp > 0) ? +u.amp : (mp ? mp.price : null);
+    const s0 = dmgSheet(), base = dmgModel(s0);
+    const info = typeof soulCostInfo === 'function' ? soulCostInfo() : [0, null];
+    const fodder = info && info[1] != null && isFinite(info[1]) ? +info[1] : null;
+    const dmg = [], nodmg = [], items = [], skipped = [];
+    for (const eq of c.equipment) {
+      const cat = CAT[eq.slotPosName], key = charKey() + '|' + eq.slotPos;
+      if (!cat) { skipped.push(eq.name + ' (' + eq.slotPosName + '): needs an Enhance Scroll, not modelled'); continue; }
+      const gcap = GRADECAP[eq.grade];
+      if (!gcap) { skipped.push(eq.name + ' (' + eq.grade + ' grade): not modelled'); continue; }
+      const det = detectIlvl(eq), ilvl = +u.ilvl[key] > 0 ? +u.ilvl[key] : det.v;
+      const ampCap = u.cap[key] != null && u.cap[key] !== '' ? +u.cap[key] : ampCapFor(ilvl, eq.grade);
+      const cur = eq.enchantLevel || 0, maxL = gcap >= 15 ? 15 + ampCap : gcap;
+      items.push({ key, eq, cat, ilvl, src: +u.ilvl[key] > 0 ? 'edited' : det.src, ampCap, cur, maxL, gcap });
+      if (cur >= maxL) continue;
+      const st0 = statsAt(cat, cur, ilvl);
+      let cum = { att: 0, kina: 0, enh: 0, amp: 0 };
+      const steps = [];
+      for (let L = cur + 1; L <= maxL; L++) {
+        const si = stepInfo(L, ilvl, gcap);
+        cum = { att: cum.att + si.att, kina: cum.kina + si.kina, enh: cum.enh + si.enh, amp: cum.amp + si.amp };
+        let gain = 0;
+        if (cat === 'weapon' || cat === 'acc') {
+          const st = statsAt(cat, L, ilvl);
+          let t = dmgApply(s0, 'Attack', st.atk - st0.atk);
+          if (st.db - st0.db) t = dmgApply(t, 'Damage Boost', st.db - st0.db);
+          gain = (dmgModel(t) / base - 1) * 100;
+        }
+        const total = cum.kina + cum.enh * stoneKina + (cum.amp ? (ampPrice == null ? Infinity : cum.amp * ampPrice) : 0);
+        steps.push({ L, cum: { ...cum }, gain, total });
+      }
+      const est = (det.src === 'estimated' || det.src === 'guess') || eq.grade !== 'Unique';
+      const mk = (a, b) => {
+        const A = a ? a.cum : { att: 0, kina: 0, enh: 0, amp: 0 }, B = b.cum;
+        const total = b.total - (a ? a.total : 0), gain = b.gain - (a ? a.gain : 0);
+        return { kind: 'enh', name: eq.name, slot: eq.slotPosName, action: lvl(a ? a.L : cur) + ' → ' + lvl(b.L), att: B.att - A.att, kina: B.kina - A.kina, enh: B.enh - A.enh, amp: B.amp - A.amp, total, gain, ratio: gain > 1e-9 && isFinite(total) ? total / gain : null, est, grade: eq.grade, ilvl };
+      };
+      if (cat === 'weapon' || cat === 'acc') {
+        // iron out the steps into blocks whose cost per damage never decreases (steps of one item must be bought in order)
+        const blocks = [];
+        let prev = null;
+        for (const s of steps) {
+          blocks.push({ from: prev, to: s });
+          prev = s;
+          while (blocks.length >= 2) {
+            const b2 = blocks[blocks.length - 1], b1 = blocks[blocks.length - 2];
+            const r1 = (b1.to.total - (b1.from ? b1.from.total : 0)) / Math.max(1e-12, b1.to.gain - (b1.from ? b1.from.gain : 0));
+            const r2 = (b2.to.total - b2.from.total) / Math.max(1e-12, b2.to.gain - b2.from.gain);
+            if (r2 < r1) { blocks.splice(blocks.length - 2, 2, { from: b1.from, to: b2.to }); } else break;
+          }
+        }
+        for (const bl of blocks) dmg.push(mk(bl.from, bl.to));
+      } else if (steps.length) {
+        nodmg.push(mk(null, steps[0]));
+      }
+    }
+    // soulbind reroll options from the existing ranking
+    const rer = [];
+    let rankNote = '';
+    try {
+      const rk = dmgRank();
+      if (Array.isArray(rk)) {
+        for (const r of rk) {
+          const t = r.top; if (!t) continue;
+          const K = r.K || 10, gain = (t.roll || 0) * 100;
+          const cost = fodder != null ? K * fodder : null;
+          rer.push({ kind: 'reroll', name: r.item, slot: r.label, action: 'Reroll ' + t.name + ' x' + K + ' (best line each time)', att: K, kina: cost, enh: 0, amp: 0, total: cost, gain, ratio: cost != null && gain > 1e-9 ? cost / gain : null, grade: '', ilvl: null });
+        }
+      } else rankNote = 'Reroll ranking is still calculating. Reopen this tab in a moment.';
+    } catch (e) { rankNote = 'Reroll ranking unavailable: ' + e.message; }
+    return { dmg: dmg.concat(rer), nodmg, items, skipped, ampPrice, ampName: mp ? mp.name : null, fodder, stoneKina, rankNote };
+  }
+
+  // ---- UI
+  function ensureDom() {
+    if (document.getElementById('pUpg')) return;
+    const host = document.getElementById('pChar') || document.body;
+    const div = document.createElement('div');
+    div.id = 'pUpg'; div.hidden = true;
+    div.innerHTML = '<section><h2>Cheapest upgrades</h2>' +
+      '<p class="muted">Ranks enhancement, Amplify and soulbind reroll options for the loaded character by Kina per 1% damage, using your damage model. Costs assume you start each step with no pity. Steps of one item are grouped when buying them together is cheaper per 1% than buying them one by one. Enhance Stones are listed separately; value them below if you want them in the total.</p>' +
+      '<div id="upctl"></div><div id="upout"></div></section>';
+    host.insertAdjacentElement('afterend', div);
+    div.addEventListener('change', onChange);
+    div.addEventListener('click', onClick);
+    const tb = document.createElement('button');
+    tb.id = 'tabU'; tb.className = 'tab'; tb.textContent = 'Upgrades';
+    const th = document.getElementById('tabH'); if (th) th.insertAdjacentElement('afterend', tb);
+    tb.onclick = () => window.showTab('U');
+  }
+  function onChange(e) {
+    const t = e.target, u = ui();
+    if (t.id === 'upstone') u.stone = Math.max(0, +t.value || 0);
+    else if (t.id === 'upamp') u.amp = Math.max(0, +t.value || 0);
+    else if (t.dataset && t.dataset.upil) u.ilvl[t.dataset.upil] = +t.value || 0;
+    else if (t.dataset && t.dataset.upcap) u.cap[t.dataset.upcap] = t.value === '' ? '' : Math.max(0, Math.min(5, +t.value || 0));
+    else return;
+    save(); render();
+  }
+  async function onClick(e) {
+    const t = e.target;
+    if (t.id === 'uprecalc') { render(true); }
+    if (t.id === 'uptoggle') { ui().showAll = !ui().showAll; save(); render(); }
+    if (t.id === 'upfetch') {
+      t.disabled = true; const m = document.getElementById('upmsg'); if (m) m.textContent = 'Fetching prices…';
+      try { await refreshPrices([], x => { if (m) m.textContent = x; }); } catch (err) { if (m) m.textContent = err.message; }
+      t.disabled = false; render();
+    }
+  }
+  function render(force) {
+    ensureDom();
+    const ctl = document.getElementById('upctl'), out = document.getElementById('upout');
+    if (!state.char) { ctl.innerHTML = ''; out.innerHTML = '<p class="muted">Load a character first (Character tab: look one up, or load characters.json).</p>'; return; }
+    out.innerHTML = '<p class="muted">Calculating…</p>';
+    setTimeout(() => {
+      let r;
+      try { r = compute(); } catch (e) { out.innerHTML = '<p class="warn">Could not calculate: ' + esc(e.message) + '</p>'; console.error(e); return; }
+      if (!r) { out.innerHTML = '<p class="muted">This character has no equipment data.</p>'; return; }
+      const u = ui();
+      ctl.innerHTML = '<p><label>Price of 10,000 Enhance Stones (Kina) <input id="upstone" type="number" min="0" step="1000" value="' + (+u.stone || 0) + '" style="width:130px"></label> ' +
+        '<span class="muted">One Sealed Wing morphs into 10,000. Leave 0 to ignore stones in the ranking.</span></p>' +
+        '<p><label>Amplify Stone price (Kina, empty = market) <input id="upamp" type="number" min="0" step="1000" value="' + (+u.amp > 0 ? +u.amp : '') + '" style="width:130px"></label> ' +
+        '<button type="button" id="upfetch">Fetch market prices</button> <button type="button" id="uprecalc">Recalculate</button> <span id="upmsg" class="muted"></span></p>' +
+        '<p class="muted">Amplify Stone: ' + (r.ampPrice != null ? NF(r.ampPrice) + ' Kina' + (r.ampName && !(+u.amp > 0) ? ' (' + esc(r.ampName) + ', market)' : ' (manual)') : '<span class="warn">no price yet. Click Fetch market prices or type one.</span>') +
+        ' · Fodder price per reroll: ' + (r.fodder != null ? NF(r.fodder) + ' Kina' : '<span class="warn">not set (Soulbind Odds tab, Reroll cost)</span>') + '</p>';
+      const ranked = r.dmg.filter(x => x.ratio != null && isFinite(x.ratio)).sort((a, b) => a.ratio - b.ratio);
+      let rc = 0, rg = 0; ranked.forEach(x => { rc += x.total; rg += x.gain; x.runCost = rc; x.runGain = rg; });
+      const LIM = 40, showAll = !!ui().showAll, shown = showAll ? ranked : ranked.slice(0, LIM);
+      const unranked = r.dmg.filter(x => !(x.ratio != null && isFinite(x.ratio)));
+      const tr = (x, i) => '<tr><td>' + (i == null ? '' : i + 1) + '</td><td style="text-align:left">' + esc(x.name) + '<br><span class="muted">' + esc(x.slot) + (x.ilvl ? ' · item level ' + x.ilvl : '') + '</span></td>' +
+        '<td style="text-align:left">' + (x.kind === 'enh' ? '<b>' + esc(x.action) + '</b>' : esc(x.action)) + (x.est ? ' <span class="warn" title="item level or grade curve estimated">~</span>' : '') + '</td>' +
+        '<td>' + (x.att == null ? '-' : (Math.round(x.att * 10) / 10)) + '</td><td>' + NF(x.kina) + '</td><td>' + (x.enh ? NF(x.enh) : '') + '</td><td>' + (x.amp ? NF(x.amp) : '') + '</td><td>' + NF(x.total) + '</td><td>' + gainF(x.gain) + '</td><td><b>' + (x.ratio != null && isFinite(x.ratio) ? NF(x.ratio) : '-') + '</b></td><td>' + (x.runCost != null ? NF(x.runCost) : '') + '</td><td>' + (x.runGain != null ? gainF(x.runGain) : '') + '</td></tr>';
+      const head = '<tr><th>#</th><th>Item</th><th>Upgrade</th><th>Avg tries</th><th>Kina</th><th>Enhance Stones</th><th>Amplify Stones</th><th>Total cost</th><th>Damage gain</th><th>Kina per 1%</th><th>Running cost</th><th>Running gain</th></tr>';
+      let h = '<h3>Damage upgrades, cheapest per 1% damage first</h3><div class="scroll"><table>' + head + shown.map((x, i) => tr(x, i)).join('') + (ranked.length ? '' : '<tr><td colspan="12" class="muted">Nothing to rank yet.</td></tr>') + '</table></div>' + (ranked.length > LIM ? '<p><button type="button" id="uptoggle">' + (showAll ? 'Show only the first ' + LIM : 'Show all ' + ranked.length + ' rows') + '</button></p>' : '') +
+        '<p class="muted">Total cost = Kina + Amplify Stones at the price above + Enhance Stones at your price per 10,000. "Reroll" rows use the Soulbind reroll simulation (K rerolls, Character tab setting) at your fodder price. ~ = estimated item level or non-Unique cost curve.</p>';
+      if (r.rankNote) h += '<p class="warn">' + esc(r.rankNote) + '</p>';
+      if (unranked.length) h += '<p class="muted">Not ranked (missing a price or no damage gain): ' + unranked.map(x => esc(x.name + ' ' + x.action)).join('; ') + '</p>';
+      const nd = r.nodmg.slice().sort((a, b) => a.total - b.total);
+      h += '<h3>No damage gain (defense and health only), cheapest next step first</h3><div class="scroll"><table><tr><th>Item</th><th>Next step</th><th>Avg tries</th><th>Kina</th><th>Enhance Stones</th><th>Amplify Stones</th></tr>' +
+        nd.map(x => '<tr><td style="text-align:left">' + esc(x.name) + '<br><span class="muted">' + esc(x.slot) + ' · item level ' + x.ilvl + '</span></td><td style="text-align:left">' + esc(x.action) + (x.est ? ' <span class="warn">~</span>' : '') + '</td><td>' + (Math.round(x.att * 10) / 10) + '</td><td>' + NF(x.kina) + '</td><td>' + (x.enh ? NF(x.enh) : '') + '</td><td>' + (x.amp ? NF(x.amp) : '') + '</td></tr>').join('') + '</table></div>';
+      const needsCheck = r.items.some(x => x.src === 'estimated' || x.src === 'guess');
+      h += '<details' + (needsCheck ? ' open' : '') + '><summary>Items and assumptions (edit item level or Amplify cap if a value looks wrong)</summary><div class="scroll"><table><tr><th>Item</th><th>Grade</th><th>Level</th><th>Item level</th><th>Source</th><th>Amplify cap</th></tr>' +
+        r.items.map(x => '<tr><td style="text-align:left">' + esc(x.eq.name) + '<br><span class="muted">' + esc(x.eq.slotPosName) + '</span></td><td>' + esc(x.eq.grade) + '</td><td>' + lvl(x.cur) + '</td>' +
+          '<td><input type="number" data-upil="' + esc(x.key) + '" value="' + x.ilvl + '" style="width:70px"></td><td>' + esc(x.src) + '</td><td>' + (x.eq.grade === 'Unique' ? '<input type="number" min="0" max="5" data-upcap="' + esc(x.key) + '" value="' + x.ampCap + '" style="width:55px">' : '-') + '</td></tr>').join('') + '</table></div>' +
+        (r.skipped.length ? '<p class="muted">Not modelled: ' + r.skipped.map(esc).join('; ') + '</p>' : '') +
+        '<p class="muted">Costs per attempt are client data for item level 102, scaled linearly with item level. Odds: 100% to +10, then 65/50/35/25/20% with +5% per failure. Amplify: 66/50/33/25/20% with +5/+4/+3/+2/+1% per failure. Gains come from item-level-86 tables, scaled by item level. Non-Unique grades use the Unique cost curve.</p></details>';
+      out.innerHTML = h;
+    }, 10);
+  }
+
+  // ---- hooks
+  ensureDom();
+  const origShow = window.showTab;
+  window.showTab = function (n) {
+    const u = document.getElementById('pUpg'), tb = document.getElementById('tabU');
+    if (n === 'U') {
+      for (const id of ['pPlanner', 'pMat', 'pOwned', 'pCook', 'pSoul', 'pPools', 'pCraft', 'pChar']) { const e = document.getElementById(id); if (e) e.hidden = true; }
+      for (const t of ['P', 'M', 'O', 'K', 'S', 'L', 'C', 'H']) { const b = document.getElementById('tab' + t); if (b) b.classList.remove('on'); }
+      if (u) u.hidden = false; if (tb) tb.classList.add('on');
+      render(); return;
+    }
+    if (u) u.hidden = true; if (tb) tb.classList.remove('on');
+    return origShow.apply(this, arguments);
+  };
+  // include the Amplify Stone market price in every existing price fetch
+  const origApply = window.applySnapshot;
+  window.applySnapshot = function (items, wanted, sid) {
+    try {
+      const extra = items.filter(i => i && /^Amplify Stone/i.test(i.name || '') && !/Bound|Fragment/i.test(i.name)).map(i => i.name);
+      wanted = Array.from(new Set([].concat(wanted || [], extra)));
+    } catch (e) {}
+    return origApply.call(this, items, wanted, sid);
+  };
+  window.__upg = { compute, expAttempts, stepInfo, statsAt, detectIlvl };
 })();
 
 </script>
