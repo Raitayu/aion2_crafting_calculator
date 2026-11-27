@@ -2222,4 +2222,159 @@ window.dmgHtml=function(){let h=oH();if(h&&!window.__dmgWarm)h=h.replace('No equ
 })();
 
 </script>
+<script>
+
+/*odyle-v1*/
+(function () {
+  if (window.__odyleV1) return;
+  if (typeof catalog === 'undefined' || typeof cache !== 'function' || typeof fetchSnapshot !== 'function' || typeof applySnapshot !== 'function' || typeof store === 'undefined') {
+    console.error('Odyle tab NOT applied: the base calculator functions were not found');
+    window.__odyleV1 = 'missing'; return;
+  }
+  window.__odyleV1 = 1;
+  const PRE = ['', 'Fine ', 'Pure ', 'Radiant '], TN = ['Regular', 'Fine', 'Pure', 'Radiant'], YIELD = [0, 2, 2, 3], ODY = 'Odyle';
+  const KEY = 'aion_odyle_ui';
+  const ui = Object.assign({ fam: 'Orichalcum Ore', tier: 1, qty: 1, ratio: 1, fee: 0, bfee: 0 }, store.get(KEY, {}));
+  const saveUi = () => store.set(KEY, ui);
+  const gather = n => { const k = catalog.get(n)?.item_key; return k != null && String(k).startsWith('6106'); };
+
+  const css = document.createElement('style');
+  css.textContent = '#pOdyle .grid td,#pOdyle .grid th{text-align:center;padding:7px 6px}#pOdyle .grid td:first-child,#pOdyle .grid th:first-child{text-align:left}#pOdyle .grid td.pick{cursor:pointer}#pOdyle .grid td.pick:hover{background:#26334a}#pOdyle .grid td.sel{outline:2px solid #e8c577;outline-offset:-2px}#pOdyle .best{background:#1f3a2a}#pOdyle small{display:block;color:#aab6c9;font-size:11px}#pOdyle .route li{margin:5px 0}#pOdyle .tag{display:inline-block;padding:1px 7px;border-radius:9px;background:#344155;font-size:12px;margin-right:6px}#pOdyle .tag.ok{background:#26452f}';
+  document.head.appendChild(css);
+
+  const panel = document.createElement('div');
+  panel.id = 'pOdyle'; panel.hidden = true;
+  panel.innerHTML = '<section><h2>Odyle conversion: what is the cheapest way to get a material?</h2>' +
+    '<p class="muted">Odyle morphs into any gatherable material of the same grade (Odyle → Regular, Fine Odyle → Fine, Pure Odyle → Pure, Radiant Odyle → Radiant). Radiant breaks down into 3 Pure, Pure into 2 Fine, and Fine into 2 Regular. This tab compares buying the material, morphing Odyle, and breaking down a higher grade, using the prices already cached for your selected server. Odyle itself can also be broken down, so a cheap Radiant Odyle can feed the morph route.</p>' +
+    '<label>Material <select id="odFam"></select></label><label>Grade <select id="odTier"></select></label><label>Quantity <input id="odQty" type="number" min="1" step="1" style="width:80px"></label>' +
+    '<label>1 Odyle morphs into <input id="odRatio" type="number" min="1" step="1" style="width:55px"> material</label><label>Morph fee per Odyle <input id="odFee" type="number" min="0" step="1" style="width:80px"></label><label>Break-down fee each <input id="odBfee" type="number" min="0" step="1" style="width:80px"></label>' +
+    '<button id="odFetch">Fetch material prices</button><p id="odStatus" role="status" class="muted"></p></section>' +
+    '<section id="odResult"></section><section><h3>All materials at a glance</h3><p class="muted">Cheapest cost per unit for the quantity above. Click a cell to inspect it. Green cells are cheaper than buying that grade directly.</p><div id="odGrid" class="scroll"></div></section>';
+  const host = document.getElementById('pPlanner') ? document.getElementById('pPlanner').parentElement : document.body;
+  host.appendChild(panel);
+  const $o = id => document.getElementById(id);
+
+  function families() {
+    const names = new Set([...catalog.keys(), ...Object.keys(cache())]);
+    const m = new Map();
+    for (const n of names) {
+      if (!gather(n)) continue;
+      let t = 0, b = n;
+      for (let i = 1; i < 4; i++) if (n.startsWith(PRE[i])) { t = i; b = n.slice(PRE[i].length); break; }
+      if (!m.has(b)) m.set(b, new Set());
+      m.get(b).add(t);
+    }
+    return [...m].filter(([, s]) => s.size >= 2).map(([b]) => b).sort((a, b) => a === ODY ? -1 : b === ODY ? 1 : a.localeCompare(b));
+  }
+  let memo = new Map(), FAMS = [];
+  const price = (fam, t) => { const p = cache()[PRE[t] + fam]?.price; return valid(p) ? +p : null; };
+  function best(fam, t, q) {
+    const k = fam + '|' + t + '|' + q;
+    if (memo.has(k)) return memo.get(k);
+    const opts = [];
+    const p = price(fam, t);
+    if (p != null) opts.push({ m: 'buy', cost: p * q, steps: [{ txt: `Buy ${fmt(q)}× ${PRE[t] + fam} at ${fmt(p)} each`, c: p * q }] });
+    if (fam !== ODY && FAMS.includes(ODY)) {
+      const n = Math.ceil(q / ui.ratio), o = best(ODY, t, n);
+      if (o) opts.push({ m: 'morph', cost: o.cost + n * ui.fee, steps: [...o.steps, { txt: `Morph ${fmt(n)}× ${PRE[t] + ODY} into ${fmt(n * ui.ratio)}× ${PRE[t] + fam}` + (n * ui.ratio > q ? ` (${fmt(n * ui.ratio - q)} left over)` : ''), c: n * ui.fee }] });
+    }
+    if (t < 3) {
+      const y = YIELD[t + 1], n = Math.ceil(q / y), o = best(fam, t + 1, n);
+      if (o) opts.push({ m: 'break', cost: o.cost + n * ui.bfee, steps: [...o.steps, { txt: `Break down ${fmt(n)}× ${PRE[t + 1] + fam} into ${fmt(n * y)}× ${PRE[t] + fam}` + (n * y > q ? ` (${fmt(n * y - q)} left over)` : ''), c: n * ui.bfee }] });
+    }
+    const r = opts.length ? { ...opts.reduce((a, b) => b.cost < a.cost ? b : a), all: opts } : null;
+    memo.set(k, r); return r;
+  }
+  const LBL = { buy: 'Buy', morph: 'Morph', break: 'Break down' };
+
+  function render() {
+    memo = new Map(); FAMS = families();
+    const sf = $o('odFam'), st = $o('odTier');
+    if (!FAMS.includes(ui.fam)) ui.fam = FAMS.includes('Orichalcum Ore') ? 'Orichalcum Ore' : (FAMS[0] || '');
+    sf.innerHTML = FAMS.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+    sf.value = ui.fam;
+    st.innerHTML = TN.map((n, i) => `<option value="${i}">${n}</option>`).join(''); st.value = String(ui.tier);
+    $o('odQty').value = ui.qty; $o('odRatio').value = ui.ratio; $o('odFee').value = ui.fee; $o('odBfee').value = ui.bfee;
+    const q = Math.max(1, Math.floor(+ui.qty) || 1), name = PRE[ui.tier] + ui.fam, r = best(ui.fam, +ui.tier, q);
+    const res = $o('odResult');
+    if (!FAMS.length) { res.innerHTML = '<p class="muted">No graded materials are known yet. Click “Fetch material prices”.</p>'; $o('odGrid').innerHTML = ''; return; }
+    if (!r) {
+      res.innerHTML = `<h3>${esc(name)} × ${fmt(q)}</h3><p class="warn">No price is available for this item or for any route to it on this server. Click “Fetch material prices” (or the item may simply not be listed right now).</p>`;
+    } else {
+      const direct = r.all.find(o => o.m === 'buy'), saving = direct && r.m !== 'buy' ? direct.cost - r.cost : 0;
+      let h = `<h3>${esc(name)} × ${fmt(q)}</h3><p class="big">${fmt(Math.round(r.cost))} <span class="sub">total · ${fmt(Math.round(r.cost / q * 100) / 100)} each</span></p>`;
+      h += `<p><span class="tag ok">${LBL[r.m]}</span> is the cheapest route.` + (saving > 0 ? ` It saves ${fmt(Math.round(saving))} (${fmt(Math.round(saving / direct.cost * 1000) / 10)}%) compared with buying it directly.` : '') + '</p>';
+      h += '<ol class="route">' + r.steps.map(s => `<li>${esc(s.txt)}</li>`).join('') + '</ol>';
+      const rows = ['buy', 'morph', 'break'].map(m => { const o = r.all.find(x => x.m === m); return { m, o }; });
+      h += '<table class="grid"><tr><th>Route</th><th>Total</th><th>Each</th><th>Compared with cheapest</th></tr>' + rows.map(({ m, o }) => {
+        const label = m === 'buy' ? 'Buy directly' : m === 'morph' ? 'Morph ' + PRE[ui.tier] + ODY : 'Break down ' + (ui.tier < 3 ? PRE[+ui.tier + 1] + ui.fam : 'n/a');
+        if (!o) return `<tr><td>${esc(label)}</td><td colspan="3" class="muted">${m === 'morph' && ui.fam === ODY ? 'Not applicable' : m === 'break' && ui.tier >= 3 ? 'Radiant cannot be broken down from a higher grade' : 'No price available'}</td></tr>`;
+        const d = o.cost - r.cost;
+        return `<tr class="${o === r || o.cost === r.cost ? 'best' : ''}"><td>${esc(label)}</td><td>${fmt(Math.round(o.cost))}</td><td>${fmt(Math.round(o.cost / q * 100) / 100)}</td><td>${d === 0 ? '<span class="ok">cheapest</span>' : '+' + fmt(Math.round(d))}</td></tr>`;
+      }).join('') + '</table>';
+      res.innerHTML = h;
+    }
+    let g = '<table class="grid"><tr><th>Material</th>' + TN.map(n => `<th>${n}</th>`).join('') + '</tr>';
+    for (const f of FAMS) {
+      g += `<tr><td>${esc(f)}</td>`;
+      for (let t = 0; t < 4; t++) {
+        const b = best(f, t, q), d = price(f, t);
+        if (!b) { g += '<td class="muted">—</td>'; continue; }
+        const cheaper = d != null && b.m !== 'buy' && b.cost < d * q;
+        g += `<td class="pick${cheaper ? ' best' : ''}${f === ui.fam && t === +ui.tier ? ' sel' : ''}" data-f="${esc(f)}" data-t="${t}">${fmt(Math.round(b.cost / q))}<small>${LBL[b.m]}${cheaper ? ' · −' + fmt(Math.round((1 - b.cost / (d * q)) * 100)) + '%' : (d == null ? ' · not listed' : '')}</small></td>`;
+      }
+      g += '</tr>';
+    }
+    $o('odGrid').innerHTML = g + '</table>';
+    $o('odGrid').querySelectorAll('td.pick').forEach(td => td.onclick = () => { ui.fam = td.dataset.f; ui.tier = +td.dataset.t; saveUi(); render(); });
+  }
+
+  const num = (id, key, min, int) => $o(id).addEventListener('input', () => { let v = +$o(id).value; if (!Number.isFinite(v) || v < min) v = min; ui[key] = int ? Math.floor(v) : v; saveUi(); renderKeep(id); });
+  function renderKeep(id) { const el = $o(id), v = el.value; render(); const e2 = $o(id); e2.value = v; e2.focus(); }
+  $o('odFam').addEventListener('change', e => { ui.fam = e.target.value; saveUi(); render(); });
+  $o('odTier').addEventListener('change', e => { ui.tier = +e.target.value; saveUi(); render(); });
+  num('odQty', 'qty', 1, true); num('odRatio', 'ratio', 1, true); num('odFee', 'fee', 0, false); num('odBfee', 'bfee', 0, false);
+
+  async function fetchAll() {
+    const btn = $o('odFetch'), say = m => $o('odStatus').textContent = m, sid = server;
+    btn.disabled = true; $('server') && ($('server').disabled = true);
+    try {
+      const items = await fetchSnapshot(sid, async u => {
+        const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+        if (!r.ok) { let m = 'HTTP ' + r.status; try { m += ': ' + (await r.json()).error; } catch { } throw Error(m); }
+        return r.json();
+      }, o => say('Downloading: ' + o + ' records…'));
+      const mats = items.filter(i => i.name && String(i.item_key).startsWith('6106'));
+      for (const i of mats) if (!catalog.has(i.name)) catalog.set(i.name, { name: i.name, item_key: i.item_key });
+      const names = new Set(mats.map(i => i.name)), wanted = [];
+      for (const n of names) {
+        let b = n; for (let i = 1; i < 4; i++) if (n.startsWith(PRE[i])) { b = n.slice(PRE[i].length); break; }
+        if ([1, 2, 3].some(i => names.has(PRE[i] + b)) || n !== b) wanted.push(n);
+      }
+      const r = applySnapshot(items, wanted, sid);
+      save(); if (typeof window.render === 'function') window.render();
+      say(`Updated ${r.updated} materials; ${r.unlisted} currently unlisted.`);
+    } catch (e) { say('Fetch failed; existing prices retained. ' + e.message); }
+    finally { btn.disabled = false; $('server') && ($('server').disabled = false); render(); }
+  }
+  $o('odFetch').onclick = fetchAll;
+
+  const bar = (document.getElementById('tabH') || document.getElementById('tabP') || {}).parentElement;
+  const btn = document.createElement('button'); btn.id = 'tabD'; btn.className = 'tab'; btn.textContent = 'Odyle Morphing';
+  if (bar) { const dv = document.createElement('span'); dv.className = 'tab-divider'; dv.setAttribute('aria-hidden', 'true'); bar.appendChild(dv); bar.appendChild(btn); }
+  const panels = () => [...host.children].filter(e => e !== panel && /^p[A-Z]/.test(e.id || ''));
+  function showMine() {
+    panels().forEach(p => p.hidden = true);
+    (bar ? bar.querySelectorAll('.tab') : []).forEach(b => b.classList.toggle('on', b === btn));
+    panel.hidden = false; render();
+  }
+  btn.onclick = showMine;
+  if (bar) bar.addEventListener('click', e => { const b = e.target.closest('button'); if (b && b !== btn) { panel.hidden = true; btn.classList.remove('on'); } });
+  const orig = window.showTab;
+  if (typeof orig === 'function') window.showTab = function () { panel.hidden = true; btn.classList.remove('on'); return orig.apply(this, arguments); };
+  const srv = document.getElementById('server');
+  if (srv) srv.addEventListener('change', () => { if (!panel.hidden) setTimeout(render, 0); });
+})();
+
+</script>
 </html>
